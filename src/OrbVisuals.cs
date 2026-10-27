@@ -40,17 +40,23 @@ namespace QuotaOrb
         private readonly DrawingGroup halo = new DrawingGroup();
         private readonly ScaleTransform haloScale = new ScaleTransform(1, 1, 42, 42);
         private bool motionActive;
-        internal OrbFace() { Width = Height = 84; Focusable = false; halo.Transform = haloScale; }
-        internal void Update(QuotaSnapshot data, Palette colors, bool failed, bool motion)
+        private int diameter = 64;
+        private double center = 36;
+        internal OrbFace() { Width = Height = Placement.OrbExtent(64); Focusable = false; halo.Transform = haloScale; }
+        internal void Update(QuotaSnapshot data, Palette colors, bool failed, bool motion, int size = 64)
         {
             snapshot=data;palette=colors;stale=failed;
+            diameter=Placement.EffectiveDiameter(size,data!=null&&data.FiveHour!=null&&data.Week!=null);
+            Width=Height=Placement.OrbExtent(diameter);center=Width/2;
+            haloScale.CenterX=haloScale.CenterY=center;
+            double radius=diameter/2.0-1.3;
             using(var drawing=ring.Open()) {
                 double outer=data != null && data.Week != null ? data.Week.Remaining : data != null && data.FiveHour != null ? data.FiveHour.Remaining : 0;
-                DrawArc(drawing,30,outer,palette.Ring,palette.Track,1.55);
-                if(data != null && data.Week != null && data.FiveHour != null) DrawArc(drawing,25,data.FiveHour.Remaining,data.FiveHour.Remaining<=20?palette.Warning:palette.Inner,palette.Track,1.2);
+                DrawArc(drawing,radius,outer,palette.Ring,palette.Track,diameter<32?1.0:1.4);
+                if(data != null && data.Week != null && data.FiveHour != null) DrawArc(drawing,radius-3.2,data.FiveHour.Remaining,data.FiveHour.Remaining<=20?palette.Warning:palette.Inner,palette.Track,1.0);
             }
             ring.Opacity=stale ? 0.42 : 1;
-            using(var glow=halo.Open())glow.DrawEllipse(null,new Pen(palette.Ring,1.1),new Point(42,42),35,35);
+            using(var glow=halo.Open())glow.DrawEllipse(null,new Pen(palette.Ring,.7),new Point(center,center),diameter/2.0+.6,diameter/2.0+.6);
             bool animate=motion && !stale && SystemParameters.ClientAreaAnimation && !SystemParameters.HighContrast;
             if(animate!=motionActive){
                 motionActive=animate;
@@ -59,19 +65,19 @@ namespace QuotaOrb
                 if(animate){
                     var easing=new SineEase{EasingMode=EasingMode.EaseInOut};
                     halo.BeginAnimation(DrawingGroup.OpacityProperty,new DoubleAnimation(.06,.26,TimeSpan.FromSeconds(2.4)){AutoReverse=true,RepeatBehavior=RepeatBehavior.Forever,EasingFunction=easing});
-                    var expansion=new DoubleAnimation(1,1.12,TimeSpan.FromSeconds(2.4)){AutoReverse=true,RepeatBehavior=RepeatBehavior.Forever,EasingFunction=easing};
+                    var expansion=new DoubleAnimation(1,1.06,TimeSpan.FromSeconds(2.4)){AutoReverse=true,RepeatBehavior=RepeatBehavior.Forever,EasingFunction=easing};
                     haloScale.BeginAnimation(ScaleTransform.ScaleXProperty,expansion);haloScale.BeginAnimation(ScaleTransform.ScaleYProperty,expansion);
                 }
             }
             AutomationProperties.SetName(this, data==null?"额度尚未读取":(data.FiveHour!=null?"5h剩余"+data.FiveHour.Percentage+"，":"")+(data.Week!=null?"周剩余"+data.Week.Percentage:""));
             InvalidateVisual();
         }
-        private static void DrawArc(DrawingContext d,double radius,double remaining,Brush color,Brush track,double thickness)
+        private void DrawArc(DrawingContext d,double radius,double remaining,Brush color,Brush track,double thickness)
         {
-            var center=new Point(42,42);d.DrawEllipse(null,new Pen(track,thickness),center,radius,radius);
+            var origin=new Point(center,center);d.DrawEllipse(null,new Pen(track,thickness),origin,radius,radius);
             if(remaining<=0)return;
             double sweep=Math.Min(99.999,remaining)*Math.PI*2/100;
-            var start=new Point(42,42-radius);var end=new Point(42+radius*Math.Sin(sweep),42-radius*Math.Cos(sweep));
+            var start=new Point(center,center-radius);var end=new Point(center+radius*Math.Sin(sweep),center-radius*Math.Cos(sweep));
             var geometry=new StreamGeometry();
             using(var g=geometry.Open()){g.BeginFigure(start,false,false);g.ArcTo(end,new Size(radius,radius),0,sweep>Math.PI,SweepDirection.Clockwise,true,false);}
             geometry.Freeze();var pen=new Pen(color,thickness){StartLineCap=PenLineCap.Round,EndLineCap=PenLineCap.Round};
@@ -80,18 +86,35 @@ namespace QuotaOrb
         protected override void OnRender(DrawingContext d)
         {
             d.DrawDrawing(halo);
-            d.DrawEllipse(new SolidColorBrush(Color.FromArgb(18,0,0,0)),null,new Point(42,43),33,33);
-            d.DrawEllipse(palette.Surface,null,new Point(42,42),32,32);d.DrawDrawing(ring);
-            if(snapshot==null){DrawCentered(d,"—",19,palette.Muted,30);return;}
-            if(snapshot.FiveHour!=null&&snapshot.Week!=null){DrawRow(d,"5h",snapshot.FiveHour.Percentage,27);DrawRow(d,"周",snapshot.Week.Percentage,44);}
-            else{var value=snapshot.Week??snapshot.FiveHour;DrawCentered(d,value.Label,11,palette.Muted,21);DrawCentered(d,value.Percentage,19,palette.Text,36);}
+            double radius=diameter/2.0;
+            d.DrawEllipse(new SolidColorBrush(Color.FromArgb(18,0,0,0)),null,new Point(center,center+.6),radius+.6,radius+.6);
+            d.DrawEllipse(palette.Surface,null,new Point(center,center),radius,radius);d.DrawDrawing(ring);
+            if(snapshot==null){DrawCentered(d,"—",Math.Max(11,diameter*.3),palette.Muted,center,true);return;}
+            if(snapshot.FiveHour!=null&&snapshot.Week!=null){DrawRow(d,"5h",snapshot.FiveHour.Percentage,center-7);DrawRow(d,"周",snapshot.Week.Percentage,center+7);}
+            else{
+                var value=snapshot.Week??snapshot.FiveHour;
+                if(diameter<40)DrawCompactPercentage(d,value.Percentage);
+                else{DrawCentered(d,value.Label,10.5,palette.Muted,center-12,true);DrawCentered(d,value.Percentage,Math.Min(19,diameter*.38),palette.Text,center+5,true);}
+            }
         }
         private void DrawRow(DrawingContext d,string label,string value,double y)
         {
-            var left=Text(label,10.5,palette.Muted);var right=Text(value,12.5,palette.Text);double x=(84-left.Width-right.Width-4)/2;
-            d.DrawText(left,new Point(x,y));d.DrawText(right,new Point(x+left.Width+4,y));
+            double small=diameter<48?8.5:10.5,large=diameter<48?10.5:12.5;
+            var left=Text(label,small,palette.Muted);var right=Text(value,large,palette.Text);
+            double available=diameter-8-left.Width-2;if(right.Width>available)right=Text(value,large*available/right.Width,palette.Text);
+            double x=(Width-left.Width-right.Width-2)/2;
+            d.DrawText(left,new Point(x,y-left.Height/2));d.DrawText(right,new Point(x+left.Width+2,y-right.Height/2));
         }
-        private void DrawCentered(DrawingContext d,string text,double size,Brush brush,double y){var formatted=Text(text,size,brush);d.DrawText(formatted,new Point((84-formatted.Width)/2,y));}
+        private void DrawCompactPercentage(DrawingContext d,string value)
+        {
+            double size=Math.Max(11.5,diameter*.4),suffixSize=size*.6;
+            var number=Text(value.TrimEnd('%'),size,palette.Text);var suffix=Text("%",suffixSize,palette.Muted);
+            double available=diameter-3.5,used=number.Width+suffix.Width+.5;
+            if(used>available){double ratio=available/used;number=Text(value.TrimEnd('%'),size*ratio,palette.Text);suffix=Text("%",suffixSize*ratio,palette.Muted);}
+            double x=(Width-number.Width-suffix.Width-.5)/2,y=center-number.Height/2;
+            d.DrawText(number,new Point(x,y));d.DrawText(suffix,new Point(x+number.Width+.5,y+number.Baseline-suffix.Baseline));
+        }
+        private void DrawCentered(DrawingContext d,string text,double size,Brush brush,double y,bool middle){var formatted=Text(text,size,brush);d.DrawText(formatted,new Point((Width-formatted.Width)/2,middle?y-formatted.Height/2:y));}
         private FormattedText Text(string text,double size,Brush brush){return new FormattedText(text,CultureInfo.CurrentUICulture,FlowDirection.LeftToRight,new Typeface("Segoe UI"),size,brush,VisualTreeHelper.GetDpi(this).PixelsPerDip);}
     }
 
@@ -141,8 +164,9 @@ namespace QuotaOrb
                 AddOption("轻微呼吸动画",settings.Motion,delegate{settings.Motion=!settings.Motion;Changed();});
                 var sizeRow=new DockPanel{Margin=new Thickness(0,5,0,5)};
                 var increase=ActionButton("＋",delegate{settings.Diameter=Math.Min(80,settings.Diameter+4);Changed();});increase.Width=28;AutomationProperties.SetName(increase,"放大悬浮球");DockPanel.SetDock(increase,Dock.Right);sizeRow.Children.Add(increase);
-                var decrease=ActionButton("−",delegate{settings.Diameter=Math.Max(48,settings.Diameter-4);Changed();});decrease.Width=28;AutomationProperties.SetName(decrease,"缩小悬浮球");DockPanel.SetDock(decrease,Dock.Right);sizeRow.Children.Add(decrease);
+                var decrease=ActionButton("−",delegate{settings.Diameter=Math.Max(24,settings.Diameter-4);Changed();});decrease.Width=28;AutomationProperties.SetName(decrease,"缩小悬浮球");DockPanel.SetDock(decrease,Dock.Right);sizeRow.Children.Add(decrease);
                 sizeRow.Children.Add(Label("大小："+settings.Diameter+" px",11.5,palette.Muted,new Thickness(3,5,0,0)));options.Children.Add(sizeRow);
+                if(settings.Diameter<40&&snapshot!=null&&snapshot.FiveHour!=null&&snapshot.Week!=null)options.Children.Add(Label("双额度自动放大到 40px",11,palette.Muted,new Thickness(3,0,0,5)));
                 options.Children.Add(ActionButton("刷新："+settings.RefreshSeconds+" 秒",delegate{settings.RefreshSeconds=settings.RefreshSeconds==15?30:settings.RefreshSeconds==30?60:15;Changed();}));
                 var theme=ActionButton("外观："+(settings.Theme=="auto"?"跟随 Codex":settings.Theme=="dark"?"深色":"浅色"),delegate{settings.Theme=settings.Theme=="auto"?"dark":settings.Theme=="dark"?"light":"auto";Changed();});options.Children.Add(theme);
                 var actions=new DockPanel {Margin=new Thickness(0,8,0,0)};var quit=ActionButton("退出",delegate{if(ExitRequested!=null)ExitRequested();});DockPanel.SetDock(quit,Dock.Right);actions.Children.Add(quit);actions.Children.Add(ActionButton("立即刷新",delegate{if(RefreshRequested!=null)RefreshRequested();}));options.Children.Add(actions);

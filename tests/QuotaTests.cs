@@ -22,8 +22,11 @@ internal static class QuotaTests
         Check(exhausted.FiveHour.Remaining==0,"Overage must clamp to zero.");
         var credit=QuotaSnapshot.Parse("{\"rateLimits\":{\"primary\":{\"usedPercent\":22,\"windowDurationMins\":10080}},\"rateLimitResetCredits\":{\"availableCount\":3,\"credits\":[{\"status\":\"redeemed\",\"expiresAt\":1794000000},{\"status\":\"available\",\"expiresAt\":1793599881}]}}",now);
         Check(credit.ResetCredits==3&&credit.PartialCreditDetails&&credit.CreditExpiry.HasValue,"Count is authoritative and incomplete detail must be marked.");
+        Check(Placement.EffectiveDiameter(24,false)==24,"Single quota must support avatar size.");
+        Check(Placement.EffectiveDiameter(24,true)==40,"Dual quotas must enlarge automatically to keep both visible.");
+        Check(Placement.EffectiveDiameter(64,true)==64,"An explicitly larger size must be preserved.");
         var bounds=new DeviceRect(-1920,0,1920,1080);
-        foreach(double scale in new[]{1.0,1.25,1.5,2.0})foreach(string side in new[]{"left","right"})foreach(int diameter in new[]{48,52,64,80})foreach(double fraction in new[]{0.0,.5,1.0}){
+        foreach(double scale in new[]{1.0,1.25,1.5,2.0})foreach(string side in new[]{"left","right"})foreach(int diameter in new[]{24,28,32,40,48,52,64,80})foreach(double fraction in new[]{0.0,.5,1.0}){
             var orb=Placement.Orb(bounds,side,fraction,scale,diameter);var card=Placement.Card(bounds,orb,252*scale,270*scale,scale);
             Check(orb.X>=bounds.X&&orb.Right<=bounds.Right&&orb.Y>=bounds.Y&&orb.Bottom<=bounds.Bottom,"Orb must fit on a negative-coordinate monitor.");
             Check(card.X>=bounds.X&&card.Right<=bounds.Right&&card.Y>=bounds.Y&&card.Bottom<=bounds.Bottom,"Panel must fit at edges across DPI scales.");
