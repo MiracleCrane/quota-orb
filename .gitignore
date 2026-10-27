@@ -1,0 +1,8 @@
+bin/
+obj/
+artifacts/
+node_modules/
+*.user
+settings.json
+usage-cache.json
+*.log

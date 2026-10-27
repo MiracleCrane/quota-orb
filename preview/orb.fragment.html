@@ -1,0 +1,209 @@
+<div id="quota-orb-preview" aria-label="原生极简额度悬浮球交互预览">
+  <div class="qp-preview-bar">
+    <span>Quota Orb<span class="qp-demo-label">设计预览 · 演示数据</span></span>
+    <label>预览状态 <select id="qp-scenario" aria-label="切换演示账户状态"><option value="weekly">仅周额度</option><option value="both">5h + 周额度</option><option value="low">额度较低</option><option value="stale">刷新失败</option></select></label>
+  </div>
+  <div class="qp-window">
+    <div class="qp-titlebar"><span class="qp-wordmark">Codex</span><span class="qp-title-path">额度悬浮球</span><span class="qp-window-actions" aria-hidden="true"><i data-lucide="minus"></i><i data-lucide="square"></i><i data-lucide="x"></i></span></div>
+    <div class="qp-workspace">
+      <aside class="qp-sidebar" aria-label="模拟侧栏">
+        <div class="qp-new"><i data-lucide="square-pen" aria-hidden="true"></i>新建聊天</div>
+        <div class="qp-sidebar-label">最近</div>
+        <div class="qp-chat-selected">额度悬浮球</div>
+        <div class="qp-chat">界面与交互</div>
+        <div class="qp-sidebar-bottom"><span class="qp-avatar">L</span><span>个人工作区</span></div>
+      </aside>
+      <main class="qp-main">
+        <div class="qp-chat-header">额度悬浮球<span>本地</span></div>
+        <div class="qp-conversation">
+          <div class="qp-user-message">只要额度和重置时间。</div>
+          <div class="qp-answer"><span class="qp-answer-marker"></span><div>留在视线里，不打断手上的事。<br><span>悬停查看重置时间，拖动后自动贴边。</span></div></div>
+        </div>
+        <div class="qp-composer"><div class="qp-placeholder">继续聊聊这个设计…</div><div class="qp-composer-footer"><i data-lucide="plus" aria-hidden="true"></i><span>GPT-6.1</span><span class="qp-access">完全访问</span><span class="qp-send" aria-hidden="true"><i data-lucide="arrow-up"></i></span></div></div>
+      </main>
+      <div class="qp-orb-dock" id="qp-dock">
+        <div class="qp-detail" id="qp-detail" role="region" aria-label="额度与重置时间" hidden>
+          <div class="qp-detail-head"><span>剩余额度</span><button id="qp-settings-button" class="qp-icon-button" type="button" aria-label="显示选项" aria-expanded="false"><i data-lucide="ellipsis" aria-hidden="true"></i></button></div>
+          <div class="qp-meter qp-five-hour" hidden><div class="qp-meter-line"><span>5 小时</span><strong id="qp-hour-value">62%</strong></div><div class="qp-track"><span id="qp-hour-bar" style="width:62%"></span></div><div class="qp-reset">今天 13:40 重置</div></div>
+          <div class="qp-meter"><div class="qp-meter-line"><span>周额度</span><strong id="qp-week-value">78%</strong></div><div class="qp-track"><span id="qp-week-bar" style="width:78%"></span></div><div class="qp-reset">11 月 2 日 14:11 重置</div></div>
+          <div id="qp-coupons" class="qp-coupons" hidden><div><span>重置券</span><span>2 张</span></div><div class="qp-reset">最早 10 月 29 日 19:04 到期</div></div>
+          <div id="qp-stale" class="qp-stale" hidden>刷新失败 · 保留上次读数</div>
+          <div id="qp-options" class="qp-options" hidden><label><input id="qp-coupon-toggle" type="checkbox"><span>显示重置券与到期时间</span></label><label><input id="qp-motion-toggle" type="checkbox" checked><span>轻微呼吸动画</span></label></div>
+        </div>
+        <button class="qp-orb" id="qp-orb" type="button" aria-label="周额度剩余 78%，展开重置时间" aria-expanded="false">
+          <svg class="qp-rings" viewBox="0 0 68 68" aria-hidden="true"><circle class="qp-ring-track" cx="34" cy="34" r="30"></circle><circle class="qp-week-ring" cx="34" cy="34" r="30" pathLength="100" stroke-dasharray="78 100"></circle><circle class="qp-ring-track qp-inner-ring qp-five-hour" cx="34" cy="34" r="25" hidden></circle><circle class="qp-hour-ring qp-five-hour" cx="34" cy="34" r="25" pathLength="100" stroke-dasharray="62 100" hidden></circle></svg>
+          <span class="qp-orb-content" id="qp-orb-content"><span class="qp-single-label">周</span><span class="qp-single-value">78<span>%</span></span></span>
+        </button>
+      </div>
+    </div>
+    <div class="qp-statusbar"><span class="qp-status-dot"></span>本地工作区</div>
+  </div>
+  <div class="qp-preview-footer"><span>悬停展开 · 点击固定 · 拖动贴边</span><button type="button" id="qp-expand-demo">展开看看<i data-lucide="arrow-up-right" aria-hidden="true"></i></button></div>
+</div>
+<style>
+#quota-orb-preview{--qp-bg:light-dark(#ffffff,#191a1b);--qp-sidebar:light-dark(#f5f5f5,#151617);--qp-surface:light-dark(#fff,#252627);--qp-text:light-dark(#292a2d,#e8e8e9);--qp-muted:light-dark(#73777c,#95979b);--qp-soft:light-dark(#8c9095,#777b80);--qp-line:light-dark(#e9eaec,#2e3032);--qp-selected:light-dark(#e9e9ea,#292b2d);--qp-input:light-dark(#fbfbfb,#202123);--qp-track:light-dark(#e9ebed,#3c3f42);--qp-ring:light-dark(#51565b,#d4d8dc);--qp-inner:light-dark(#9ba1a8,#898f96);--qp-shadow:light-dark(#00000016,#00000038);font-family:"Segoe UI",system-ui,-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;line-height:1.5;font-weight:400;color:var(--qp-text);width:100%;box-sizing:border-box;color-scheme:light dark}
+#quota-orb-preview *{box-sizing:border-box}
+#quota-orb-preview [hidden]{display:none!important}
+#quota-orb-preview button,#quota-orb-preview select,#quota-orb-preview input{font:inherit;color:inherit}
+#quota-orb-preview button{cursor:var(--cursor-interaction,pointer)}
+#quota-orb-preview svg:not(.qp-rings){width:15px;height:15px;stroke-width:1.6;flex-shrink:0}
+#quota-orb-preview .qp-preview-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:4px 2px 14px;color:var(--qp-muted);font-size:12px;flex-wrap:wrap}
+#quota-orb-preview .qp-demo-label{margin-left:10px;opacity:.65}
+#quota-orb-preview .qp-preview-bar label{display:flex;align-items:center;gap:10px}
+#quota-orb-preview select{border:1px solid var(--qp-line);background:var(--qp-bg);border-radius:7px;padding:5px 24px 5px 8px;font-size:12px}
+#quota-orb-preview .qp-window{border:1px solid var(--qp-line);border-radius:13px;overflow:hidden;background:var(--qp-bg);box-shadow:0 8px 36px var(--qp-shadow)}
+#quota-orb-preview .qp-titlebar{height:43px;display:flex;align-items:center;gap:14px;padding:0 17px;border-bottom:1px solid var(--qp-line);background:var(--qp-sidebar);position:relative}
+#quota-orb-preview .qp-wordmark{font-weight:500;letter-spacing:-.2px}
+#quota-orb-preview .qp-title-path{font-size:12px;color:var(--qp-muted);border-left:1px solid var(--qp-line);padding-left:14px}
+#quota-orb-preview .qp-window-actions{display:flex;gap:24px;margin-left:auto;color:var(--qp-muted);padding-right:5px}
+#quota-orb-preview .qp-window-actions svg{width:11px;height:11px}
+#quota-orb-preview .qp-workspace{height:488px;display:flex;position:relative;overflow:hidden}
+#quota-orb-preview .qp-sidebar{width:180px;flex-shrink:0;background:var(--qp-sidebar);padding:20px 10px;position:relative;font-size:12px}
+#quota-orb-preview .qp-new{display:flex;align-items:center;gap:9px;padding:0 10px 28px;color:var(--qp-text)}
+#quota-orb-preview .qp-sidebar-label{padding:0 10px 9px;color:var(--qp-muted);font-size:11px}
+#quota-orb-preview .qp-chat-selected,#quota-orb-preview .qp-chat{padding:8px 10px;border-radius:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#quota-orb-preview .qp-chat-selected{background:var(--qp-selected)}
+#quota-orb-preview .qp-chat{color:var(--qp-muted);margin-top:2px}
+#quota-orb-preview .qp-sidebar-bottom{position:absolute;bottom:16px;left:20px;display:flex;align-items:center;gap:8px;color:var(--qp-muted)}
+#quota-orb-preview .qp-avatar{width:23px;height:23px;display:grid;place-items:center;border-radius:50%;background:var(--qp-selected);color:var(--qp-text);font-size:11px}
+#quota-orb-preview .qp-main{flex:1;min-width:0;position:relative;padding:0 28px}
+#quota-orb-preview .qp-chat-header{height:52px;display:flex;align-items:center;justify-content:space-between;font-weight:500;font-size:12px}
+#quota-orb-preview .qp-chat-header>span{font-weight:400;color:var(--qp-muted);font-size:11px;margin-right:3px}
+#quota-orb-preview .qp-conversation{padding-top:28px;max-width:580px;margin:0 auto}
+#quota-orb-preview .qp-user-message{background:var(--qp-input);border-radius:16px 16px 3px 16px;padding:11px 15px;width:fit-content;max-width:88%;margin-left:auto;font-size:13px}
+#quota-orb-preview .qp-answer{display:flex;gap:12px;margin-top:35px;font-size:14px;line-height:1.9}
+#quota-orb-preview .qp-answer span:not(.qp-answer-marker){color:var(--qp-muted);font-size:13px}
+#quota-orb-preview .qp-answer-marker{width:5px;height:5px;margin-top:11px;border-radius:50%;background:var(--qp-soft);flex-shrink:0}
+#quota-orb-preview .qp-composer{position:absolute;left:28px;right:28px;bottom:25px;max-width:620px;margin:0 auto;border:1px solid var(--qp-line);background:var(--qp-input);border-radius:17px;padding:15px 15px 12px;box-shadow:0 1px 4px var(--qp-shadow)}
+#quota-orb-preview .qp-placeholder{color:var(--qp-soft);margin-bottom:26px}
+#quota-orb-preview .qp-composer-footer{display:flex;align-items:center;gap:14px;color:var(--qp-muted);font-size:11px}
+#quota-orb-preview .qp-access{color:var(--qp-soft)}
+#quota-orb-preview .qp-send{display:grid;place-items:center;margin-left:auto;width:24px;height:24px;border-radius:50%;background:var(--qp-selected);color:var(--qp-muted)}
+#quota-orb-preview .qp-statusbar{height:27px;display:flex;align-items:center;gap:7px;padding-left:17px;border-top:1px solid var(--qp-line);color:var(--qp-soft);font-size:10px}
+#quota-orb-preview .qp-status-dot{width:4px;height:4px;border-radius:50%;background:var(--qp-soft)}
+#quota-orb-preview .qp-orb-dock{position:absolute;right:18px;top:47%;width:64px;height:64px;z-index:5;touch-action:none}
+#quota-orb-preview .qp-orb{position:relative;width:64px;height:64px;padding:0;border-radius:50%;border:1px solid var(--qp-line);background:var(--qp-surface);box-shadow:0 3px 13px var(--qp-shadow);display:grid;place-items:center;touch-action:none;isolation:isolate;transition:box-shadow .25s,transform .25s;user-select:none}
+#quota-orb-preview .qp-orb:hover{box-shadow:0 5px 22px var(--qp-shadow)}
+#quota-orb-preview .qp-orb:active{transform:scale(.97)}
+#quota-orb-preview .qp-orb[data-dragging=true]{cursor:grabbing;transform:scale(1.035)}
+#quota-orb-preview .qp-rings{position:absolute;inset:0;width:100%;height:100%;overflow:visible;transform:rotate(-90deg);fill:none;stroke-width:1.7}
+#quota-orb-preview .qp-ring-track{stroke:var(--qp-track)}
+#quota-orb-preview .qp-week-ring{stroke:var(--qp-ring);stroke-linecap:round;animation:qp-breathe 6s ease-in-out infinite;transition:stroke-dasharray .55s ease}
+#quota-orb-preview .qp-hour-ring{stroke:var(--qp-inner);stroke-width:1.3;stroke-linecap:round;transition:stroke-dasharray .55s ease}
+#quota-orb-preview .qp-inner-ring{stroke-width:1.3;opacity:.5}
+#quota-orb-preview .qp-orb-content{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;font-variant-numeric:tabular-nums;line-height:1.15}
+#quota-orb-preview .qp-single-label{font-size:11px;color:var(--qp-muted);margin-bottom:2px}
+#quota-orb-preview .qp-single-value{font-size:19px;font-weight:500;letter-spacing:-.6px}
+#quota-orb-preview .qp-single-value>span{font-size:11px;letter-spacing:0;font-weight:400;margin-left:1px}
+#quota-orb-preview .qp-orb-row{display:flex;align-items:baseline;gap:4px;font-size:12px;font-weight:500;line-height:1.55;letter-spacing:-.3px}
+#quota-orb-preview .qp-orb-row small{font-size:11px;font-weight:400;color:var(--qp-muted);width:15px;text-align:right;letter-spacing:0}
+#quota-orb-preview .qp-detail{position:absolute;width:244px;right:80px;top:0;background:var(--qp-surface);border:1px solid var(--qp-line);border-radius:13px;padding:14px 16px 16px;box-shadow:0 8px 30px var(--qp-shadow);transform-origin:right center;animation:qp-expand .20s cubic-bezier(.2,.8,.2,1);touch-action:auto}
+#quota-orb-preview .qp-detail:after{content:"";position:absolute;top:0;bottom:0;right:-22px;width:23px}
+#quota-orb-preview .qp-detail-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:19px;font-size:12px;color:var(--qp-muted)}
+#quota-orb-preview .qp-icon-button{width:26px;height:26px;display:grid;place-items:center;background:transparent;border:0;border-radius:6px;color:var(--qp-muted);padding:0;margin:-5px -5px -5px 0}
+#quota-orb-preview .qp-icon-button:hover{background:var(--qp-selected)}
+#quota-orb-preview .qp-meter+.qp-meter{margin-top:19px}
+#quota-orb-preview .qp-meter-line{display:flex;align-items:center;justify-content:space-between;font-size:13px;margin-bottom:9px}
+#quota-orb-preview .qp-meter-line strong{font-weight:500;font-variant-numeric:tabular-nums}
+#quota-orb-preview .qp-track{height:3px;border-radius:5px;background:var(--qp-track);overflow:hidden}
+#quota-orb-preview .qp-track>span{display:block;height:100%;background:var(--qp-ring);border-radius:5px}
+#quota-orb-preview .qp-reset{margin-top:9px;color:var(--qp-muted);font-size:11px}
+#quota-orb-preview .qp-coupons{margin-top:19px;padding-top:14px;border-top:1px solid var(--qp-line);font-size:12px}
+#quota-orb-preview .qp-coupons>div:first-child{display:flex;justify-content:space-between}
+#quota-orb-preview .qp-options{margin-top:16px;padding-top:13px;border-top:1px solid var(--qp-line);font-size:11px}
+#quota-orb-preview .qp-options label{display:flex;align-items:center;gap:8px;min-height:28px}
+#quota-orb-preview .qp-options input{margin:0;accent-color:var(--qp-ring);width:14px;height:14px}
+#quota-orb-preview .qp-preview-footer{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:14px 2px 3px;font-size:12px;color:var(--qp-muted);flex-wrap:wrap}
+#quota-orb-preview .qp-preview-footer button{display:flex;align-items:center;gap:6px;border:0;padding:4px 0;background:transparent;color:var(--qp-text);font-size:12px}
+#quota-orb-preview[data-motion=off] .qp-week-ring{animation:none}
+#quota-orb-preview[data-state=low] .qp-hour-ring{stroke:light-dark(#9b722f,#bd9857)}
+#quota-orb-preview[data-state=stale] .qp-rings{opacity:.45}
+#quota-orb-preview .qp-stale{margin-top:15px;padding-top:12px;border-top:1px solid var(--qp-line);color:var(--qp-muted);font-size:11px}
+#quota-orb-preview .qp-orb{border:0;box-shadow:0 2px 9px var(--qp-shadow);background:var(--qp-input)}
+#quota-orb-preview .qp-rings{stroke-width:1.5}
+#quota-orb-preview .qp-statusbar{font-size:11px}
+#quota-orb-preview .qp-options label{min-height:32px}
+#quota-orb-preview .qp-detail[data-placement=right]:after{right:auto;left:-23px}
+#quota-orb-preview .qp-detail[data-placement=above]:after{top:auto;bottom:-23px;right:0;left:0;width:auto;height:23px}
+#quota-orb-preview .qp-detail[data-placement=below]:after{top:-23px;bottom:auto;right:0;left:0;width:auto;height:23px}
+@keyframes qp-breathe{0%,70%,100%{opacity:1}35%{opacity:.68}}
+@keyframes qp-expand{from{opacity:0;transform:translateX(5px) scale(.98)}to{opacity:1;transform:translateX(0) scale(1)}}
+@media(prefers-reduced-motion:reduce){#quota-orb-preview *,#quota-orb-preview *:before,#quota-orb-preview *:after{animation:none!important;transition:none!important}}
+@media(max-width:680px){#quota-orb-preview .qp-sidebar{width:140px}#quota-orb-preview .qp-main{padding:0 20px}#quota-orb-preview .qp-composer{left:20px;right:20px}#quota-orb-preview .qp-workspace{height:460px}#quota-orb-preview .qp-detail{width:234px;right:74px}#quota-orb-preview .qp-orb-dock{right:12px}}
+@media(max-width:460px){#quota-orb-preview .qp-sidebar{display:none}#quota-orb-preview .qp-workspace{height:445px}#quota-orb-preview .qp-title-path{display:none}#quota-orb-preview .qp-main{padding:0 17px}#quota-orb-preview .qp-detail{width:220px;right:0;top:auto;bottom:79px;transform:none;transform-origin:bottom right;animation:none}#quota-orb-preview .qp-detail:after{top:auto;bottom:-22px;right:0;width:100%;height:23px}#quota-orb-preview .qp-orb-dock{top:47%}#quota-orb-preview .qp-answer{font-size:13px}#quota-orb-preview .qp-preview-footer{font-size:11px}#quota-orb-preview .qp-titlebar{padding-right:100px}#quota-orb-preview .qp-window-actions{display:none}}
+</style>
+<script>
+(() => {
+  const root = document.getElementById('quota-orb-preview');
+  const dock = root.querySelector('#qp-dock');
+  const orb = root.querySelector('#qp-orb');
+  const detail = root.querySelector('#qp-detail');
+  const content = root.querySelector('#qp-orb-content');
+  const scenario = root.querySelector('#qp-scenario');
+  const demo = root.querySelector('#qp-expand-demo');
+  const settingsButton = root.querySelector('#qp-settings-button');
+  const options = root.querySelector('#qp-options');
+  const coupons = root.querySelector('#qp-coupons');
+  const couponToggle = root.querySelector('#qp-coupon-toggle');
+  const motionToggle = root.querySelector('#qp-motion-toggle');
+  const workspace = root.querySelector('.qp-workspace');
+  const saved = window.openai?.widgetState;
+  const state = { scenario: saved?.modelContent?.scenario ?? 'weekly', coupons: saved?.modelContent?.coupons ?? false, motion: saved?.privateContent?.motion ?? true, diameter: 64 };
+  let pinned = false;
+  let closeTimer;
+  let openTimer;
+  let dragStart;
+  let moved = false;
+  const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
+  function save() { window.openai?.setWidgetState?.({modelContent:{scenario:state.scenario,has5h:['both','low'].includes(state.scenario),coupons:state.coupons},privateContent:{motion:state.motion}}).catch(()=>{}); }
+  function positionDetail() {
+    if(detail.hidden)return;
+    const stage=workspace.getBoundingClientRect(), ball=dock.getBoundingClientRect();
+    detail.style.width=Math.min(244,stage.width-24)+'px';
+    const w=detail.offsetWidth,h=detail.offsetHeight,x=ball.left-stage.left,y=ball.top-stage.top;
+    let left,top,placement;
+    if(x>=w+22){left=x-w-14;top=clamp(y+(state.diameter-h)/2,12,stage.height-h-12);placement='left';}
+    else if(stage.width-x-state.diameter>=w+22){left=x+state.diameter+14;top=clamp(y+(state.diameter-h)/2,12,stage.height-h-12);placement='right';}
+    else{left=clamp(x+(state.diameter-w)/2,12,stage.width-w-12);const below=y+state.diameter+14;top=below+h<stage.height-12?below:clamp(y-h-14,12,stage.height-h-12);placement=top>=y?'below':'above';}
+    detail.style.left=(left-x)+'px';detail.style.top=(top-y)+'px';detail.style.right='auto';detail.style.bottom='auto';
+    detail.dataset.placement=placement;
+  }
+  function open() { clearTimeout(closeTimer); clearTimeout(openTimer); detail.hidden = false;positionDetail();orb.setAttribute('aria-expanded','true'); demo.firstChild.textContent = '收起卡片'; }
+  function close() { clearTimeout(openTimer);if (pinned) return; detail.hidden = true; options.hidden = true; settingsButton.setAttribute('aria-expanded','false'); orb.setAttribute('aria-expanded','false'); demo.firstChild.textContent = '展开看看'; }
+  function render() {
+    const has5h=['both','low'].includes(state.scenario), week=state.scenario==='low'?27:78, hour=state.scenario==='low'?12:62;
+    root.querySelectorAll('.qp-five-hour').forEach(el => { el.toggleAttribute('hidden', !has5h); });
+    content.innerHTML = has5h ? '<span class="qp-orb-row"><small>5h</small>'+hour+'%</span><span class="qp-orb-row"><small>周</small>'+week+'%</span>' : '<span class="qp-single-label">周</span><span class="qp-single-value">'+week+'<span>%</span></span>';
+    orb.setAttribute('aria-label',(has5h?'5小时额度剩余'+hour+'%，':'')+'周额度剩余'+week+'%，展开重置时间');
+    root.querySelector('.qp-week-ring').setAttribute('stroke-dasharray',week+' 100');
+    root.querySelector('.qp-hour-ring').setAttribute('stroke-dasharray',hour+' 100');
+    root.querySelector('#qp-hour-value').textContent=hour+'%';root.querySelector('#qp-week-value').textContent=week+'%';
+    root.querySelector('#qp-hour-bar').style.width=hour+'%';root.querySelector('#qp-week-bar').style.width=week+'%';
+    root.querySelector('#qp-stale').hidden=state.scenario!=='stale';root.dataset.state=state.scenario;
+    scenario.value = state.scenario;
+    coupons.hidden = !state.coupons; couponToggle.checked = state.coupons;
+    root.dataset.motion = state.motion ? 'on' : 'off';motionToggle.checked=state.motion;
+    orb.style.width = orb.style.height = dock.style.width = dock.style.height = state.diameter+'px';
+    positionDetail();
+  }
+  scenario.addEventListener('change',()=>{state.scenario=scenario.value;render();save();});
+  couponToggle.addEventListener('change',()=>{state.coupons=couponToggle.checked;render();save();});
+  motionToggle.addEventListener('change',()=>{state.motion=motionToggle.checked;render();save();});
+  dock.addEventListener('pointerenter',e=>{clearTimeout(closeTimer);if(!dragStart&&e.pointerType!=='touch')openTimer=setTimeout(open,180);});
+  dock.addEventListener('pointerleave',()=>{clearTimeout(openTimer);closeTimer=setTimeout(close,220);});
+  orb.addEventListener('focus',open);
+  orb.addEventListener('click',()=>{if(moved){moved=false;return;}pinned=!pinned;if(pinned)open();else close();});
+  demo.addEventListener('click',()=>{pinned=detail.hidden;if(pinned)open();else close();});
+  settingsButton.addEventListener('click',()=>{options.hidden=!options.hidden;settingsButton.setAttribute('aria-expanded',String(!options.hidden));pinned=true;positionDetail();});
+  root.addEventListener('keydown',e=>{if(e.key==='Escape'){pinned=false;close();orb.blur();}});
+  root.addEventListener('pointerdown',e=>{if(!dock.contains(e.target)&&!demo.contains(e.target)){pinned=false;close();}});
+  orb.addEventListener('pointerdown',e=>{if(e.button!==0)return;const a=dock.getBoundingClientRect();dragStart={x:e.clientX,y:e.clientY,left:a.left,top:a.top};moved=false;orb.setPointerCapture(e.pointerId);});
+  orb.addEventListener('pointermove',e=>{if(!dragStart)return;const dx=e.clientX-dragStart.x,dy=e.clientY-dragStart.y;if(Math.hypot(dx,dy)<5&&!moved)return;moved=true;pinned=false;detail.hidden=true;orb.dataset.dragging='true';const b=workspace.getBoundingClientRect();const x=Math.max(8,Math.min(b.width-state.diameter-8,dragStart.left-b.left+dx));const y=Math.max(10,Math.min(b.height-state.diameter-10,dragStart.top-b.top+dy));dock.style.right='auto';dock.style.left=x+'px';dock.style.top=y+'px';});
+  function endDrag(){if(!dragStart)return;dragStart=null;orb.dataset.dragging='false';if(!moved)return;const b=workspace.getBoundingClientRect(),a=dock.getBoundingClientRect();const left=a.left-b.left<b.width/2;dock.style.left=left?'12px':'auto';dock.style.right=left?'auto':'12px';positionDetail();}
+  orb.addEventListener('pointerup',endDrag);orb.addEventListener('pointercancel',endDrag);
+  window.addEventListener('openai:set_globals',e=>{const v=e.detail?.globals?.widgetState?.modelContent;if(v){state.scenario=v.scenario??(v.has5h?'both':'weekly');state.coupons=!!v.coupons;render();}});
+  new ResizeObserver(positionDetail).observe(workspace);
+  render();
+  if(globalThis.Tweak){const tweak=new Tweak({container:root,onChange:render});tweak.addSlider(state,'diameter',{label:'球体大小',min:58,max:76,step:2,unit:'px'});tweak.addToggle(state,'motion',{label:'轻微呼吸动画'});}
+})();
+</script>
