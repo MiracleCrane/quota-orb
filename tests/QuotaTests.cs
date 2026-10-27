@@ -11,6 +11,11 @@ internal static class QuotaTests
     [STAThread]
     private static void Main()
     {
+        try { Run(); }
+        catch (Exception error) { Console.Error.WriteLine("FAIL: "+error.Message); Environment.ExitCode=1; }
+    }
+    private static void Run()
+    {
         var now=new DateTimeOffset(2026,10,27,0,0,0,TimeSpan.Zero);
         var onlyWeek=QuotaSnapshot.Parse("{\"rateLimits\":{\"primary\":{\"usedPercent\":22,\"windowDurationMins\":10080,\"resetsAt\":1793599881}}}",now);
         Check(onlyWeek.FiveHour==null,"A weekly primary must not create a 5h window.");Check(onlyWeek.Week.Remaining==78,"Remaining is 100 minus used.");
@@ -34,7 +39,22 @@ internal static class QuotaTests
         VerifyDispatcherAtStartup();
         var noMotionFace=new OrbFace();noMotionFace.Update(QuotaSnapshot.Demo(false),new Palette(true),false,false,32);
         Check(!noMotionFace.BreathingEnabled&&noMotionFace.BreathingOpacity==0,"Disabling motion must not leave an opaque static halo on first render.");
+        VerifyBreathingAcrossQuotaFailure();
         Console.WriteLine("PASS: "+assertions+" quota, credit, placement and UI dispatch assertions.");
+    }
+    private static void VerifyBreathingAcrossQuotaFailure()
+    {
+        var face=new OrbFace();var palette=new Palette(true);var retained=QuotaSnapshot.Demo(false);
+        retained.Week.Remaining=53;
+        face.Update(retained,palette,false,true,32);
+        if(!System.Windows.SystemParameters.ClientAreaAnimation||System.Windows.SystemParameters.HighContrast)return;
+        Check(face.BreathingEnabled,"The initial valid snapshot must start breathing.");
+        face.Update(retained,palette,true,true,32);
+        Check(face.BreathingEnabled,"A transient quota refresh failure must not stop breathing while retained data stays visible.");
+        face.Update(retained,palette,false,true,32);
+        Check(face.BreathingEnabled,"Recovering a quota read must preserve breathing.");
+        face.Update(retained,palette,true,false,32);
+        Check(!face.BreathingEnabled,"The explicit motion switch must still stop breathing during a read failure.");
     }
     private static void VerifyDispatcherAtStartup()
     {

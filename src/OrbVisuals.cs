@@ -62,7 +62,8 @@ namespace QuotaOrb
             ring.Opacity=stale ? 0.42 : 1;
             double haloRadius=diameter/2.0+.3;
             using(var glow=halo.Open())glow.DrawEllipse(null,new Pen(palette.Ring,1.2),new Point(center,center),haloRadius,haloRadius);
-            bool animate=motion && !stale && SystemParameters.ClientAreaAnimation && !SystemParameters.HighContrast;
+            // A failed quota read dims the retained meter, but is not a motion preference.
+            bool animate=motion && SystemParameters.ClientAreaAnimation && !SystemParameters.HighContrast;
             if(animate!=motionActive||animatedDiameter!=diameter){
                 motionActive=animate;
                 animatedDiameter=diameter;
