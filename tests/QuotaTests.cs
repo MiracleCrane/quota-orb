@@ -1,5 +1,8 @@
 using System;
 using QuotaOrb;
+using System.Threading;
+using System.Windows.Controls;
+using System.Windows.Threading;
 
 internal static class QuotaTests
 {
@@ -25,6 +28,20 @@ internal static class QuotaTests
             Check(orb.X>=bounds.X&&orb.Right<=bounds.Right&&orb.Y>=bounds.Y&&orb.Bottom<=bounds.Bottom,"Orb must fit on a negative-coordinate monitor.");
             Check(card.X>=bounds.X&&card.Right<=bounds.Right&&card.Y>=bounds.Y&&card.Bottom<=bounds.Bottom,"Panel must fit at edges across DPI scales.");
         }
-        Console.WriteLine("PASS: "+assertions+" quota, credit and placement assertions.");
+        VerifyDispatcherAtStartup();
+        Console.WriteLine("PASS: "+assertions+" quota, credit, placement and UI dispatch assertions.");
+    }
+    private static void VerifyDispatcherAtStartup()
+    {
+        var owner=Dispatcher.CurrentDispatcher;
+        var element=new Border();
+        var previous=SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(null);
+        var frame=new DispatcherFrame();bool completed=false,failed=false;
+        var timeout=new DispatcherTimer{Interval=TimeSpan.FromSeconds(5)};
+        timeout.Tick+=delegate{timeout.Stop();frame.Continue=false;};timeout.Start();
+        DispatcherWork.Run(owner,delegate{return 52;},delegate(int value){Check(owner.CheckAccess(),"Refresh completion must run on the UI thread without a captured synchronization context.");element.Width=value;completed=true;frame.Continue=false;},delegate{failed=true;frame.Continue=false;});
+        Dispatcher.PushFrame(frame);timeout.Stop();SynchronizationContext.SetSynchronizationContext(previous);
+        Check(completed&&!failed&&element.Width==52,"Startup refresh must be able to update a real WPF object.");
     }
 }

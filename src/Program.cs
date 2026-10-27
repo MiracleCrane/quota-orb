@@ -40,7 +40,10 @@ namespace QuotaOrb
             using(var instance=new Mutex(true,"Local\\QuotaOrb.Standalone.0",out created)){
                 if(!created&&!demo)return 0;
                 var app=new Application{ShutdownMode=ShutdownMode.OnExplicitShutdown};
-                using(var controller=new OrbController(app,demo)){controller.Start();app.Run();}
+                using(var controller=new OrbController(app,demo)){
+                    app.Dispatcher.BeginInvoke(new Action(controller.Start),DispatcherPriority.Loaded);
+                    app.Run();
+                }
             }
             return 0;
         }
@@ -118,12 +121,16 @@ namespace QuotaOrb
             if(!demo&&!busy&&DateTime.Now>=nextRead)Refresh();
             if(DateTime.Now>=nextStatus){WriteStatus();nextStatus=DateTime.Now.AddSeconds(2);}
         }
-        private async void Refresh()
+        private void Refresh()
         {
             busy=true;bool credits=settings.ShowCredits;
-            var data=await Task.Run(delegate{return client.Read(credits);});
-            busy=false;if(disposed)return;
+            DispatcherWork.Run(app.Dispatcher,delegate{return client.Read(credits);},CompleteRefresh,delegate{CompleteRefresh(null);});
+        }
+        private void CompleteRefresh(QuotaSnapshot data)
+        {
+            app.Dispatcher.VerifyAccess();busy=false;if(disposed)return;
             error=client.Error;
+            if(data==null&&String.IsNullOrEmpty(error))error="额度读取失败";
             if(data!=null){snapshot=data;failures=0;}else failures++;
             nextRead=DateTime.Now.AddSeconds(data!=null?settings.RefreshSeconds:Math.Min(300,30*Math.Pow(2,Math.Min(3,failures-1))));
             if(refreshAgain){nextRead=DateTime.MinValue;refreshAgain=false;}
@@ -195,7 +202,7 @@ namespace QuotaOrb
             if(demo)return;
             try{
                 Directory.CreateDirectory(Settings.DirectoryPath);
-                var status=new {version="0.1.0",processId=Process.GetCurrentProcess().Id,source="Codex app-server",quota=snapshot,error=error,
+                var status=new {version="0.1.0",processId=Process.GetCurrentProcess().Id,running=!disposed,writtenAtUtc=DateTimeOffset.UtcNow,source="Codex app-server",quota=snapshot,error=error,
                     orbVisible=orb.IsVisible,panelVisible=card.IsVisible,hostFound=host!=null,scale=host==null?0:host.Scale,
                     orbBounds=orb.Handle==IntPtr.Zero?new DeviceRect():Native.Bounds(orb.Handle),dark=palette.Dark,showCredits=settings.ShowCredits,motion=settings.Motion,diameter=settings.Diameter,refreshSeconds=settings.RefreshSeconds,
                     toolWindow=orb.Handle!=IntPtr.Zero&&(Native.ExtendedStyle(orb.Handle)&0x80)!=0,taskbarEntry=orb.ShowInTaskbar,cardOpenCount=cardOpenCount,cardCloseCount=cardCloseCount};
