@@ -2,7 +2,29 @@
 
 面向 Windows Codex Desktop 的极简额度悬浮球。
 
-当前阶段：**交互原型**。`preview/index.html` 可以直接用浏览器打开；所有额度都是演示数据，尚未连接账户，也不是已完成的 Windows 客户端。
+当前阶段：**Windows 原生测试版**。原生客户端通过本机 Codex app-server 读取真实额度；`preview/index.html` 保留为独立设计预览，里面的数字仍是演示数据。
+
+## Windows 使用
+
+要求 Windows 10/11、.NET Framework 4.8，以及已经登录的官方 Codex Windows 客户端或 CLI。无需 API Key，不读取或复制 `auth.json`。
+
+```powershell
+./build.ps1 -Test
+./install.ps1 -StartWithWindows
+```
+
+从桌面或开始菜单的 **Quota Orb** 启动。默认安装到 `%LOCALAPPDATA%\Programs\QuotaOrb`；可用 `-Destination` 指定位置。构建使用 Windows 自带的 .NET Framework 编译器，不需要安装 .NET SDK 或下载 NuGet 包。
+
+- 默认球体直径 52 个逻辑像素，可在展开卡片的显示选项中用 `− / ＋` 调整到 48–80。
+- 默认每 15 秒读取额度；读取失败会保留旧读数并标记更新时间，重试逐步退避。
+- Codex 仍是最前面的普通应用窗口时保持显示，鼠标移到任务栏或系统菜单不会因此隐藏；切到其他应用或最小化 Codex 后隐藏。
+- 鼠标悬停展开、点击固定、Esc 收起；拖动松手后贴近左右边缘。
+- 外圈轻微扩散，数字和额度环保持稳定。可关闭动画，系统减少动态效果和高对比度设置也会被尊重。
+- 主球和卡片均不创建任务栏入口。退出入口在卡片显示选项中。
+
+配置和只含显示状态的诊断文件位于 `%LOCALAPPDATA%\QuotaOrb`。如无法自动找到 CLI，可在 `settings.json` 的 `CodexPath` 指定 `codex.exe`。支持 `CODEX_HOME` 及已有代理环境变量。
+
+开发验证入口：`QuotaOrb.exe --render <目录>` 导出原生深浅色样例；`--demo` 使用演示数据；`--snapshot <文件>` 进行一次只读额度查询。只有不带这些参数的正常启动模式才会持续跟随 Codex。
 
 ## 设计范围
 
@@ -23,8 +45,8 @@
 
 ## 代码来源与许可证
 
-此仓库目前包含独立编写的预览和设计文档。没有包含、复制或改编其他额度助手的程序源码、品牌素材或二进制文件，也不是其 fork。
+此仓库包含独立编写的原生客户端、预览和设计文档。没有包含、复制或改编其他额度助手的程序源码、品牌素材或二进制文件，也不是其 fork。
 
-计划通过本机官方 Codex app-server 只读获取额度。接口名和数据字段来自产品协议；账户登录仍由 Codex 管理。
+通过本机官方 Codex app-server 的 `account/rateLimits/read` 只读获取额度。接口名和数据字段按本机生成的协议 Schema 核验；账户登录仍由 Codex 管理。客户端没有模型调用、重置券兑换或写入账户的入口。
 
 本项目独立编写的代码采用 [MIT](LICENSE) 许可证。预览运行时与开发工具的通用依赖见 [THIRD_PARTY.md](THIRD_PARTY.md)。Codex 是 OpenAI 的产品名称，本项目为非官方独立工具。
