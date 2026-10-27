@@ -19,4 +19,5 @@ jobs:
           path: |
             artifacts/QuotaOrb.exe
             artifacts/QuotaOrb.exe.config
+            artifacts/QuotaOrb.Launcher.exe
             LICENSE

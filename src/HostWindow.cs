@@ -79,6 +79,22 @@ namespace QuotaOrb
             return new HostFrame { Handle = lastHost, Bounds = bounds, Scale = scale, Dark = dark };
         }
 
+        internal bool HasCodexWindow()
+        {
+            bool found = false;
+            Native.EnumWindows(delegate(IntPtr window, IntPtr state) {
+                if (!Native.IsWindowVisible(window)) return true;
+                uint pid; Native.GetWindowThreadProcessId(window, out pid);
+                if (!codexProcesses.Contains((int)pid)) return true;
+                if ((Native.ExtendedStyle(window) & 0x80) != 0) return true;
+                var name = new StringBuilder(128); Native.GetClassName(window, name, name.Capacity);
+                if (!name.ToString().StartsWith("Chrome_WidgetWin_", StringComparison.Ordinal)) return true;
+                // A minimized window still exists. Closing its last root window does not.
+                found = true; return false;
+            }, IntPtr.Zero);
+            return found;
+        }
+
         private void QueueProcessScan()
         {
             nextProcessScan = DateTime.UtcNow.AddSeconds(3);

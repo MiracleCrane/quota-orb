@@ -10,10 +10,23 @@
 
 ```powershell
 ./build.ps1 -Test
-./install.ps1 -StartWithWindows
+./install.ps1
 ```
 
-从桌面或开始菜单的 **Quota Orb** 启动。默认安装到 `%LOCALAPPDATA%\Programs\QuotaOrb`；可用 `-Destination` 指定位置。构建使用 Windows 自带的 .NET Framework 编译器，不需要安装 .NET SDK 或下载 NuGet 包。
+桌面或开始菜单的 **Quota Orb** 是手动开关：未运行时开启，正在运行时关闭。默认安装到 `%LOCALAPPDATA%\Programs\QuotaOrb`；可用 `-Destination` 指定位置。构建使用 Windows 自带的 .NET Framework 编译器，不需要安装 .NET SDK 或下载 NuGet 包。
+
+联动是可选的本机配置，与开源许可证无关，也不要求特定的启动器名称或个人路径。独立安装后即可手动开关；希望自动联动时，只需要把已有快捷方式传给 `-CodexShortcutPath`。
+
+```powershell
+# 选择用户原本用来打开 Codex 的 .lnk，可传入多个。
+./install.ps1 -CodexShortcutPath $existingCodexShortcut
+```
+
+安装器为每个入口保留原快捷方式快照，包装层仍由 Windows 启动该快照，因此商店应用身份、参数、工作目录、图标，以及已有代理或桥接入口都保留。重装不会重复套娃；若快捷方式在安装过程中被其他程序改动，会停止覆盖。通过这些入口打开 Codex 时自动开启悬浮球，其他入口使用手动开关。
+
+联动映射保存在 `%LOCALAPPDATA%\QuotaOrb\launchers`，备份在 `shortcut-backups`，都属于本机配置，不进入源码仓库。
+
+最后一个 Codex 窗口关闭后，悬浮球在 5 秒缓冲后自动退出；最小化或切到其他应用不会被当作关闭。启动器启动慢时最多等待 30 秒。没有登录自启或常驻监听程序。
 
 - 默认球体直径 24 个逻辑像素，接近头像大小；可在显示选项中用 `− / ＋` 调整到 24–80。双额度时自动放大到至少 40px，始终保留两项数字。
 - 默认每 15 秒读取额度；读取失败会保留旧读数并标记更新时间，重试逐步退避。
@@ -26,7 +39,7 @@
 
 配置和只含显示状态的诊断文件位于 `%LOCALAPPDATA%\QuotaOrb`。如无法自动找到 CLI，可在 `settings.json` 的 `CodexPath` 指定 `codex.exe`。支持 `CODEX_HOME` 及已有代理环境变量。
 
-开发验证入口：`QuotaOrb.exe --render <目录>` 导出原生深浅色样例；`--demo` 使用演示数据；`--snapshot <文件>` 进行一次只读额度查询。只有不带这些参数的正常启动模式才会持续跟随 Codex。
+开发验证入口：`QuotaOrb.exe --render <目录>` 导出原生深浅色样例；`--demo` 使用演示数据；`--snapshot <文件>` 进行一次只读额度查询；`--toggle` 手动切换；`--exit` 请求正常退出。启动包装层通过现有 Windows 桌面启动程序，不依赖调用它的 Codex 执行会话。
 
 ## 设计范围
 

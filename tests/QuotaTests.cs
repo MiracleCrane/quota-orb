@@ -40,7 +40,21 @@ internal static class QuotaTests
         var noMotionFace=new OrbFace();noMotionFace.Update(QuotaSnapshot.Demo(false),new Palette(true),false,false,32);
         Check(!noMotionFace.BreathingEnabled&&noMotionFace.BreathingOpacity==0,"Disabling motion must not leave an opaque static halo on first render.");
         VerifyBreathingAcrossQuotaFailure();
+        VerifyCodexLifetime();
         Console.WriteLine("PASS: "+assertions+" quota, credit, placement and UI dispatch assertions.");
+    }
+    private static void VerifyCodexLifetime()
+    {
+        var startup=new HostLifetime();
+        Check(!startup.ShouldExit(false,TimeSpan.FromSeconds(29)),"The launcher must allow Codex time to create its window.");
+        Check(startup.ShouldExit(false,TimeSpan.FromSeconds(30)),"An unused manual start must not become a resident watcher.");
+        var linked=new HostLifetime();
+        Check(!linked.ShouldExit(true,TimeSpan.Zero),"A visible Codex window must keep the orb alive.");
+        Check(!linked.ShouldExit(true,TimeSpan.FromHours(2)),"Background or minimized Codex still has a window and must not close the orb.");
+        Check(!linked.ShouldExit(false,TimeSpan.FromHours(2).Add(TimeSpan.FromSeconds(1))),"A disappearing window must allow a short close grace period.");
+        Check(!linked.ShouldExit(true,TimeSpan.FromHours(2).Add(TimeSpan.FromSeconds(4))),"A replacement window during the grace period must cancel the close.");
+        Check(!linked.ShouldExit(false,TimeSpan.FromHours(2).Add(TimeSpan.FromSeconds(10))),"A later close must get its own grace period.");
+        Check(linked.ShouldExit(false,TimeSpan.FromHours(2).Add(TimeSpan.FromSeconds(15)))&&linked.ExitReason=="codex-closed","The orb must exit when the final Codex window stays closed.");
     }
     private static void VerifyBreathingAcrossQuotaFailure()
     {

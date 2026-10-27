@@ -17,8 +17,8 @@ using System.Windows.Threading;
 
 [assembly: AssemblyTitle("Quota Orb")]
 [assembly: AssemblyDescription("Minimal Codex quota companion")]
-[assembly: AssemblyVersion("0.1.3.0")]
-[assembly: AssemblyFileVersion("0.1.3.0")]
+[assembly: AssemblyVersion("0.1.4.0")]
+[assembly: AssemblyFileVersion("0.1.4.0")]
 [assembly: InternalsVisibleTo("QuotaOrb.Tests")]
 [assembly: AssemblyCopyright("Copyright © 2026 MiracleCrane")]
 
@@ -26,25 +26,40 @@ namespace QuotaOrb
 {
     internal static class Program
     {
+        private const string StopEventName = "Local\\QuotaOrb.Stop.0";
+        private static bool SignalStop()
+        {
+            for(int attempt=0;attempt<10;attempt++){
+                EventWaitHandle signal;
+                if(EventWaitHandle.TryOpenExisting(StopEventName,out signal)){using(signal)signal.Set();return true;}
+                Thread.Sleep(50);
+            }
+            return false;
+        }
         [STAThread]
         private static int Main(string[] args)
         {
+            if(Array.IndexOf(args,"--exit")>=0){SignalStop();return 0;}
             if(args.Length==2&&args[0]=="--snapshot"){
                 using(var client=new CodexClient()){
                     var snapshot=client.Read(Settings.Load().ShowCredits);
-                    File.WriteAllText(args[1],new JavaScriptSerializer().Serialize(new {version="0.1.3",success=snapshot!=null,error=client.Error,quota=snapshot}));
+                    File.WriteAllText(args[1],new JavaScriptSerializer().Serialize(new {version="0.1.4",success=snapshot!=null,error=client.Error,quota=snapshot}));
                     return snapshot==null?1:0;
                 }
             }
             if(args.Length==2&&args[0]=="--render"){PreviewRenderer.Render(args[1]);return 0;}
             bool demo=Array.IndexOf(args,"--demo")>=0;
+            bool toggle=Array.IndexOf(args,"--toggle")>=0;
             bool created;
-            using(var instance=new Mutex(true,"Local\\QuotaOrb.Standalone.0",out created)){
-                if(!created&&!demo)return 0;
+            string identity=demo?"Local\\QuotaOrb.Demo."+Guid.NewGuid().ToString("N"):"Local\\QuotaOrb.Standalone.0";
+            using(var instance=new Mutex(true,identity,out created)){
+                if(!created){if(toggle)SignalStop();return 0;}
                 var app=new Application{ShutdownMode=ShutdownMode.OnExplicitShutdown};
+                using(var signal=new EventWaitHandle(false,EventResetMode.AutoReset,demo?identity:StopEventName))
                 using(var controller=new OrbController(app,demo)){
+                    var wait=ThreadPool.RegisterWaitForSingleObject(signal,delegate{if(!app.Dispatcher.HasShutdownStarted)app.Dispatcher.BeginInvoke(new Action(app.Shutdown));},null,Timeout.Infinite,true);
                     app.Dispatcher.BeginInvoke(new Action(controller.Start),DispatcherPriority.Loaded);
-                    app.Run();
+                    try{app.Run();}finally{wait.Unregister(null);}
                 }
             }
             return 0;
@@ -90,6 +105,9 @@ namespace QuotaOrb
         private DateTime snapBegan,nextRead=DateTime.MinValue,nextStatus=DateTime.MinValue;
         private int failures;
         private int cardOpenCount,cardCloseCount;
+        private readonly HostLifetime lifetime = new HostLifetime();
+        private readonly Stopwatch aliveTime = Stopwatch.StartNew();
+        private string exitReason;
 
         internal OrbController(Application app,bool demo)
         {
@@ -127,6 +145,7 @@ namespace QuotaOrb
             if(disposed)return;
             if(demo){var area=SystemParameters.WorkArea;double scale=Native.GetDpiForSystem()/96.0;host=new HostFrame{Bounds=new DeviceRect(area.Left*scale,area.Top*scale,area.Width*scale,area.Height*scale),Scale=scale,Dark=true};}
             else host=hostReader.Read(ownProcessId);
+            if(!demo&&lifetime.ShouldExit(host!=null||hostReader.HasCodexWindow(),aliveTime.Elapsed)){exitReason=lifetime.ExitReason;app.Shutdown();return;}
             if(host==null){if(orb.IsVisible)orb.Hide();if(card.IsVisible)card.Hide();if(wasVisible){wasVisible=false;WriteStatus();}return;}
             bool dark=settings.Theme=="dark"||(settings.Theme=="auto"&&host.Dark);
             if(palette.Dark!=dark){palette=new Palette(dark);ApplyVisuals();}
@@ -226,7 +245,7 @@ namespace QuotaOrb
             if(demo)return;
             try{
                 Directory.CreateDirectory(Settings.DirectoryPath);
-                var status=new {version="0.1.3",processId=ownProcessId,running=!disposed,writtenAtUtc=DateTimeOffset.UtcNow,source="Codex app-server",quota=snapshot,error=error,
+                var status=new {version="0.1.4",processId=ownProcessId,running=!disposed,exitReason=exitReason,writtenAtUtc=DateTimeOffset.UtcNow,source="Codex app-server",quota=snapshot,error=error,
                     orbVisible=orb.IsVisible,panelVisible=card.IsVisible,hostFound=host!=null,scale=host==null?0:host.Scale,
                     orbBounds=orb.Handle==IntPtr.Zero?new DeviceRect():Native.Bounds(orb.Handle),dark=palette.Dark,showCredits=settings.ShowCredits,motion=settings.Motion,diameter=ActualDiameter,preferredDiameter=settings.Diameter,refreshSeconds=settings.RefreshSeconds,
                     toolWindow=orb.Handle!=IntPtr.Zero&&(Native.ExtendedStyle(orb.Handle)&0x80)!=0,taskbarEntry=orb.ShowInTaskbar,cardOpenCount=cardOpenCount,cardCloseCount=cardCloseCount,
@@ -234,7 +253,7 @@ namespace QuotaOrb
                 File.WriteAllText(Path.Combine(Settings.DirectoryPath,"status.json"),new JavaScriptSerializer().Serialize(status));
             }catch(IOException){}
         }
-        public void Dispose(){disposed=true;if(windowEvents!=null)windowEvents.Dispose();hostReader.Dispose();timer.Stop();openTimer.Stop();closeTimer.Stop();snapTimer.Stop();orb.Close();card.Close();client.Dispose();}
+        public void Dispose(){disposed=true;if(windowEvents!=null)windowEvents.Dispose();hostReader.Dispose();timer.Stop();openTimer.Stop();closeTimer.Stop();snapTimer.Stop();orb.Close();card.Close();client.Dispose();WriteStatus();}
     }
 
     internal static class PreviewRenderer
