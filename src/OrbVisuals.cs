@@ -37,12 +37,16 @@ namespace QuotaOrb
         private Palette palette = new Palette(true);
         private bool stale;
         private readonly DrawingGroup ring = new DrawingGroup();
-        private readonly DrawingGroup halo = new DrawingGroup();
+        private readonly DrawingGroup halo = new DrawingGroup { Opacity = 0 };
         private readonly ScaleTransform haloScale = new ScaleTransform(1, 1, 42, 42);
         private bool motionActive;
+        private int animatedDiameter;
         private int diameter = 64;
         private double center = 36;
         internal OrbFace() { Width = Height = Placement.OrbExtent(64); Focusable = false; halo.Transform = haloScale; }
+        internal bool BreathingEnabled { get { return motionActive; } }
+        internal double BreathingOpacity { get { return halo.Opacity; } }
+        internal object BreathingState { get { return new { enabled = motionActive, opacity = halo.Opacity, scale = haloScale.ScaleX, cycleSeconds = 3.6 }; } }
         internal void Update(QuotaSnapshot data, Palette colors, bool failed, bool motion, int size = 64)
         {
             snapshot=data;palette=colors;stale=failed;
@@ -56,16 +60,20 @@ namespace QuotaOrb
                 if(data != null && data.Week != null && data.FiveHour != null) DrawArc(drawing,radius-3.2,data.FiveHour.Remaining,data.FiveHour.Remaining<=20?palette.Warning:palette.Inner,palette.Track,1.0);
             }
             ring.Opacity=stale ? 0.42 : 1;
-            using(var glow=halo.Open())glow.DrawEllipse(null,new Pen(palette.Ring,.7),new Point(center,center),diameter/2.0+.6,diameter/2.0+.6);
+            double haloRadius=diameter/2.0+.3;
+            using(var glow=halo.Open())glow.DrawEllipse(null,new Pen(palette.Ring,1.2),new Point(center,center),haloRadius,haloRadius);
             bool animate=motion && !stale && SystemParameters.ClientAreaAnimation && !SystemParameters.HighContrast;
-            if(animate!=motionActive){
+            if(animate!=motionActive||animatedDiameter!=diameter){
                 motionActive=animate;
+                animatedDiameter=diameter;
                 halo.BeginAnimation(DrawingGroup.OpacityProperty,null);haloScale.BeginAnimation(ScaleTransform.ScaleXProperty,null);haloScale.BeginAnimation(ScaleTransform.ScaleYProperty,null);
                 halo.Opacity=0;haloScale.ScaleX=haloScale.ScaleY=1;
                 if(animate){
                     var easing=new SineEase{EasingMode=EasingMode.EaseInOut};
-                    halo.BeginAnimation(DrawingGroup.OpacityProperty,new DoubleAnimation(.06,.26,TimeSpan.FromSeconds(2.4)){AutoReverse=true,RepeatBehavior=RepeatBehavior.Forever,EasingFunction=easing});
-                    var expansion=new DoubleAnimation(1,1.06,TimeSpan.FromSeconds(2.4)){AutoReverse=true,RepeatBehavior=RepeatBehavior.Forever,EasingFunction=easing};
+                    halo.BeginAnimation(DrawingGroup.OpacityProperty,new DoubleAnimation(.08,.72,TimeSpan.FromSeconds(1.8)){AutoReverse=true,RepeatBehavior=RepeatBehavior.Forever,EasingFunction=easing});
+                    // Use the existing margin instead of enlarging the floating window.
+                    double expansionLimit=Math.Max(1,(center-.7)/haloRadius);
+                    var expansion=new DoubleAnimation(1,expansionLimit,TimeSpan.FromSeconds(1.8)){AutoReverse=true,RepeatBehavior=RepeatBehavior.Forever,EasingFunction=easing};
                     haloScale.BeginAnimation(ScaleTransform.ScaleXProperty,expansion);haloScale.BeginAnimation(ScaleTransform.ScaleYProperty,expansion);
                 }
             }
@@ -161,7 +169,7 @@ namespace QuotaOrb
             if(optionsOpen){
                 options.Children.Add(Separator());
                 AddOption("重置券与到期时间",settings.ShowCredits,delegate{settings.ShowCredits=!settings.ShowCredits;Changed();});
-                AddOption("轻微呼吸动画",settings.Motion,delegate{settings.Motion=!settings.Motion;Changed();});
+                AddOption("外圈呼吸动画",settings.Motion,delegate{settings.Motion=!settings.Motion;Changed();});
                 var sizeRow=new DockPanel{Margin=new Thickness(0,5,0,5)};
                 var increase=ActionButton("＋",delegate{settings.Diameter=Math.Min(80,settings.Diameter+4);Changed();});increase.Width=28;AutomationProperties.SetName(increase,"放大悬浮球");DockPanel.SetDock(increase,Dock.Right);sizeRow.Children.Add(increase);
                 var decrease=ActionButton("−",delegate{settings.Diameter=Math.Max(24,settings.Diameter-4);Changed();});decrease.Width=28;AutomationProperties.SetName(decrease,"缩小悬浮球");DockPanel.SetDock(decrease,Dock.Right);sizeRow.Children.Add(decrease);

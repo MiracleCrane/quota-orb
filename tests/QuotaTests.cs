@@ -32,6 +32,8 @@ internal static class QuotaTests
             Check(card.X>=bounds.X&&card.Right<=bounds.Right&&card.Y>=bounds.Y&&card.Bottom<=bounds.Bottom,"Panel must fit at edges across DPI scales.");
         }
         VerifyDispatcherAtStartup();
+        var noMotionFace=new OrbFace();noMotionFace.Update(QuotaSnapshot.Demo(false),new Palette(true),false,false,32);
+        Check(!noMotionFace.BreathingEnabled&&noMotionFace.BreathingOpacity==0,"Disabling motion must not leave an opaque static halo on first render.");
         Console.WriteLine("PASS: "+assertions+" quota, credit, placement and UI dispatch assertions.");
     }
     private static void VerifyDispatcherAtStartup()
