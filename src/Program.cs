@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
@@ -17,8 +18,8 @@ using System.Windows.Threading;
 
 [assembly: AssemblyTitle("Quota Orb")]
 [assembly: AssemblyDescription("Minimal Codex quota companion")]
-[assembly: AssemblyVersion("0.1.4.0")]
-[assembly: AssemblyFileVersion("0.1.4.0")]
+[assembly: AssemblyVersion("0.1.5.0")]
+[assembly: AssemblyFileVersion("0.1.5.0")]
 [assembly: InternalsVisibleTo("QuotaOrb.Tests")]
 [assembly: AssemblyCopyright("Copyright © 2026 MiracleCrane")]
 
@@ -43,7 +44,7 @@ namespace QuotaOrb
             if(args.Length==2&&args[0]=="--snapshot"){
                 using(var client=new CodexClient()){
                     var snapshot=client.Read(Settings.Load().ShowCredits);
-                    File.WriteAllText(args[1],new JavaScriptSerializer().Serialize(new {version="0.1.4",success=snapshot!=null,error=client.Error,quota=snapshot}));
+                    File.WriteAllText(args[1],new JavaScriptSerializer().Serialize(new {version="0.1.5",success=snapshot!=null,error=client.Error,quota=snapshot}));
                     return snapshot==null?1:0;
                 }
             }
@@ -57,6 +58,13 @@ namespace QuotaOrb
                 var app=new Application{ShutdownMode=ShutdownMode.OnExplicitShutdown};
                 using(var signal=new EventWaitHandle(false,EventResetMode.AutoReset,demo?identity:StopEventName))
                 using(var controller=new OrbController(app,demo)){
+                    app.DispatcherUnhandledException+=delegate(object sender,DispatcherUnhandledExceptionEventArgs error){
+                        if(!WindowPolicy.IsRecoverableWindowFailure(error.Exception))return;
+                        try{
+                            try{controller.RecordWindowFailure((Win32Exception)error.Exception);}catch(Exception){}
+                            Process.Start(new ProcessStartInfo(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"QuotaOrb.Launcher.exe"),"--recover "+Process.GetCurrentProcess().Id){UseShellExecute=false,CreateNoWindow=true,WindowStyle=ProcessWindowStyle.Hidden});
+                        }finally{Environment.Exit(1);}
+                    };
                     var wait=ThreadPool.RegisterWaitForSingleObject(signal,delegate{if(!app.Dispatcher.HasShutdownStarted)app.Dispatcher.BeginInvoke(new Action(app.Shutdown));},null,Timeout.Infinite,true);
                     app.Dispatcher.BeginInvoke(new Action(controller.Start),DispatcherPriority.Loaded);
                     try{app.Run();}finally{wait.Unregister(null);}
@@ -91,7 +99,9 @@ namespace QuotaOrb
         private readonly bool demo;
         private readonly int ownProcessId = Process.GetCurrentProcess().Id;
         private WindowEvents windowEvents;
-        private int pendingHostTick,restoreCount;
+        private int restoreCount;
+        private readonly DispatcherTicks hostTicks;
+        private bool pendingCardPosition;
         private volatile uint pendingForegroundTime;
         private int? lastRestoreDispatchMs;
         private HostFrame host;
@@ -112,7 +122,8 @@ namespace QuotaOrb
         internal OrbController(Application app,bool demo)
         {
             this.app=app;this.demo=demo;
-            detail=new DetailView(settings);orb=new CompanionWindow(demo?"Quota Orb · 演示":"Quota Orb",face){Width=Placement.OrbExtent(ActualDiameter),Height=Placement.OrbExtent(ActualDiameter)};card=new CompanionWindow("Quota Orb · 额度",detail){Width=252,SizeToContent=SizeToContent.Height,Opacity=0};
+            hostTicks=new DispatcherTicks(app.Dispatcher,delegate{if(!disposed)Tick();});
+            detail=new DetailView(settings);orb=new CompanionWindow(demo?"Quota Orb · 演示":"Quota Orb",face){Width=Placement.OrbExtent(ActualDiameter),Height=Placement.OrbExtent(ActualDiameter)};card=new CompanionWindow("Quota Orb · 额度",detail){Width=252,Height=1,Opacity=0};
             timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(250)};timer.Tick+=delegate{Tick();};
             openTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(120)};openTimer.Tick+=delegate{openTimer.Stop();OpenCard();};
             closeTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(220)};closeTimer.Tick+=delegate{closeTimer.Stop();if(!CursorWithinCompanion()&&!pinned)CloseCard();};
@@ -125,8 +136,8 @@ namespace QuotaOrb
             detail.OptionsChanged+=delegate{ApplyVisuals();RequestRefresh();};
             detail.RefreshRequested+=RequestRefresh;
             detail.ExitRequested+=delegate{app.Shutdown();};
-            detail.SizeChangedByContent+=delegate{if(card.IsVisible)card.Dispatcher.BeginInvoke(new Action(PositionCard),DispatcherPriority.Loaded);};
-            card.SizeChanged+=delegate{if(card.IsVisible)PositionCard();};
+            detail.SizeChangedByContent+=QueueCardPosition;
+            card.SizeChanged+=delegate{QueueCardPosition();};
             if(demo)snapshot=QuotaSnapshot.Demo(true);
             hostReader.Changed+=delegate{QueueHostTick(0);};
             ApplyVisuals();
@@ -137,8 +148,7 @@ namespace QuotaOrb
         {
             if(disposed||app.Dispatcher.HasShutdownStarted)return;
             if(eventTime!=0)pendingForegroundTime=eventTime;
-            if(Interlocked.CompareExchange(ref pendingHostTick,1,0)!=0)return;
-            app.Dispatcher.BeginInvoke(new Action(delegate{Interlocked.Exchange(ref pendingHostTick,0);if(!disposed)Tick();}),DispatcherPriority.Render);
+            hostTicks.Request(eventTime!=0);
         }
         private void Tick()
         {
@@ -146,7 +156,13 @@ namespace QuotaOrb
             if(demo){var area=SystemParameters.WorkArea;double scale=Native.GetDpiForSystem()/96.0;host=new HostFrame{Bounds=new DeviceRect(area.Left*scale,area.Top*scale,area.Width*scale,area.Height*scale),Scale=scale,Dark=true};}
             else host=hostReader.Read(ownProcessId);
             if(!demo&&lifetime.ShouldExit(host!=null||hostReader.HasCodexWindow(),aliveTime.Elapsed)){exitReason=lifetime.ExitReason;app.Shutdown();return;}
-            if(host==null){if(orb.IsVisible)orb.Hide();if(card.IsVisible)card.Hide();if(wasVisible){wasVisible=false;WriteStatus();}return;}
+            if(host==null){
+                openTimer.Stop();closeTimer.Stop();snapTimer.Stop();snapping=false;pointerDown=false;dragging=false;
+                if(orb.IsMouseCaptured)orb.ReleaseMouseCapture();
+                if(orb.IsVisible)orb.Hide();if(card.IsVisible)card.Hide();
+                if(wasVisible||DateTime.Now>=nextStatus){wasVisible=false;WriteStatus();nextStatus=DateTime.Now.AddSeconds(2);}
+                return;
+            }
             bool dark=settings.Theme=="dark"||(settings.Theme=="auto"&&host.Dark);
             if(palette.Dark!=dark){palette=new Palette(dark);ApplyVisuals();}
             if(windowEvents!=null)windowEvents.Track(host.Handle);
@@ -209,9 +225,17 @@ namespace QuotaOrb
             if(host==null||card.Handle==IntPtr.Zero)return;
             detail.Measure(new Size(252,Double.PositiveInfinity));
             double height=detail.DesiredSize.Height;
-            card.Width=252;card.Height=height;
-            var target=Placement.Card(host.Bounds,Native.Bounds(orb.Handle),252*host.Scale,height*host.Scale,host.Scale);
+            var target=WindowPolicy.Pixels(Placement.Card(host.Bounds,Native.Bounds(orb.Handle),Math.Round(252*host.Scale),Math.Ceiling(height*host.Scale),host.Scale));
+            card.Width=target.Width/host.Scale;card.Height=target.Height/host.Scale;
             Native.Move(card.Handle,target);
+        }
+        private void QueueCardPosition()
+        {
+            if(disposed||!card.IsVisible||pendingCardPosition)return;
+            pendingCardPosition=true;
+            card.Dispatcher.BeginInvoke(new Action(delegate{
+                try{if(!disposed&&card.IsVisible)PositionCard();}finally{pendingCardPosition=false;}
+            }),DispatcherPriority.Background);
         }
         private void BeginDrag(object sender,MouseButtonEventArgs e)
         {if(host==null)return;Native.GetCursorPos(out downPoint);dragStart=Native.Bounds(orb.Handle);pointerDown=true;dragging=false;openTimer.Stop();orb.CaptureMouse();e.Handled=true;}
@@ -245,12 +269,21 @@ namespace QuotaOrb
             if(demo)return;
             try{
                 Directory.CreateDirectory(Settings.DirectoryPath);
-                var status=new {version="0.1.4",processId=ownProcessId,running=!disposed,exitReason=exitReason,writtenAtUtc=DateTimeOffset.UtcNow,source="Codex app-server",quota=snapshot,error=error,
+                var status=new {version="0.1.5",processId=ownProcessId,running=!disposed,exitReason=exitReason,writtenAtUtc=DateTimeOffset.UtcNow,source="Codex app-server",quota=snapshot,error=error,
                     orbVisible=orb.IsVisible,panelVisible=card.IsVisible,hostFound=host!=null,scale=host==null?0:host.Scale,
                     orbBounds=orb.Handle==IntPtr.Zero?new DeviceRect():Native.Bounds(orb.Handle),dark=palette.Dark,showCredits=settings.ShowCredits,motion=settings.Motion,diameter=ActualDiameter,preferredDiameter=settings.Diameter,refreshSeconds=settings.RefreshSeconds,
                     toolWindow=orb.Handle!=IntPtr.Zero&&(Native.ExtendedStyle(orb.Handle)&0x80)!=0,taskbarEntry=orb.ShowInTaskbar,cardOpenCount=cardOpenCount,cardCloseCount=cardCloseCount,
                     foregroundHookActive=windowEvents!=null&&windowEvents.ForegroundHookActive,restoreCount=restoreCount,lastRestoreDispatchMs=lastRestoreDispatchMs,breathing=face.BreathingState};
                 File.WriteAllText(Path.Combine(Settings.DirectoryPath,"status.json"),new JavaScriptSerializer().Serialize(status));
+            }catch(IOException){}
+        }
+        internal void RecordWindowFailure(Win32Exception failure)
+        {
+            disposed=true;exitReason="window-message-quota";error="显示暂时中断，正在恢复";
+            try{
+                Directory.CreateDirectory(Settings.DirectoryPath);
+                File.AppendAllText(Path.Combine(Settings.DirectoryPath,"display-recovery.log"),DateTimeOffset.UtcNow.ToString("o")+" native-error="+failure.NativeErrorCode+" source=HwndTarget.UpdateWindow pid="+ownProcessId+Environment.NewLine);
+                WriteStatus();
             }catch(IOException){}
         }
         public void Dispose(){disposed=true;if(windowEvents!=null)windowEvents.Dispose();hostReader.Dispose();timer.Stop();openTimer.Stop();closeTimer.Stop();snapTimer.Stop();orb.Close();card.Close();client.Dispose();WriteStatus();}

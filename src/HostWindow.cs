@@ -66,8 +66,11 @@ namespace QuotaOrb
             if (DateTime.UtcNow >= nextProcessScan) QueueProcessScan();
             IntPtr active = Native.GetForegroundWindow();
             uint activePid; Native.GetWindowThreadProcessId(active, out activePid);
-            if (codexProcesses.Contains((int)activePid)) lastHost = Native.GetAncestor(active, 2);
-            else if (activePid != ownProcessId && !IsFrontApplication(ownProcessId)) return null;
+            var activeClass = new StringBuilder(128); Native.GetClassName(active, activeClass, activeClass.Capacity);
+            var role = WindowPolicy.Foreground(codexProcesses.Contains((int)activePid), activePid == ownProcessId,
+                shellProcesses.Contains((int)activePid), activeClass.ToString());
+            if (role == ForegroundRole.Codex) lastHost = Native.GetAncestor(active, 2);
+            else if (role == ForegroundRole.OtherApplication || !IsFrontApplication(ownProcessId)) return null;
             if (lastHost == IntPtr.Zero || !Native.IsWindowVisible(lastHost) || Native.IsIconic(lastHost)) return null;
             uint hostPid; Native.GetWindowThreadProcessId(lastHost, out hostPid);
             if (!codexProcesses.Contains((int)hostPid)) return null;
@@ -201,9 +204,13 @@ namespace QuotaOrb
         internal static long ExtendedStyle(IntPtr window) { return IntPtr.Size == 8 ? GetWindowLongPtr64(window, -20).ToInt64() : GetWindowLong32(window, -20); }
         internal static void Move(IntPtr window, DeviceRect rect)
         {
+            rect = WindowPolicy.Pixels(rect);
             var current = Bounds(window);
-            if (Math.Abs(current.X - rect.X) < .5 && Math.Abs(current.Y - rect.Y) < .5 && Math.Abs(current.Width - rect.Width) < .5 && Math.Abs(current.Height - rect.Height) < .5) return;
-            SetWindowPos(window, new IntPtr(-1), (int)Math.Round(rect.X), (int)Math.Round(rect.Y), (int)Math.Round(rect.Width), (int)Math.Round(rect.Height), 0x0010);
+            if (WindowPolicy.SamePixels(current, rect)) return;
+            uint flags = 0x0010 | 0x0004 | 0x0200; // Do not activate or reorder either window.
+            if (current.Width == rect.Width && current.Height == rect.Height) flags |= 0x0001;
+            if (current.X == rect.X && current.Y == rect.Y) flags |= 0x0002;
+            SetWindowPos(window, IntPtr.Zero, (int)rect.X, (int)rect.Y, (int)rect.Width, (int)rect.Height, flags);
         }
     }
 }

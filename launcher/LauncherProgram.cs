@@ -16,6 +16,11 @@ namespace QuotaOrb
         private static int Main(string[] args)
         {
             try {
+                int previousProcess;
+                if (args.Length == 2 && args[0] == "--recover" && Int32.TryParse(args[1], out previousProcess) && previousProcess > 0) {
+                    try { DesktopLaunch.RecoverAfterExit(previousProcess); } catch (Exception) { return 1; }
+                    return 0;
+                }
                 string config;
                 if (args.Length == 2 && args[0] == "--config") config = Path.GetFullPath(args[1]);
                 else if (args.Length == 2 && args[0] == "--link" && System.Text.RegularExpressions.Regex.IsMatch(args[1], "^[a-f0-9]{16}$"))

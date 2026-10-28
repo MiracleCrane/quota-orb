@@ -17,7 +17,8 @@ namespace QuotaOrb
                 return true;
             }
             if (!missingSince.HasValue) missingSince = elapsed;
-            if (elapsed - missingSince.Value < TimeSpan.FromSeconds(5)) return false;
+            // Hide immediately, but keep this bounded window-replacement grace for desktop updates.
+            if (elapsed - missingSince.Value < TimeSpan.FromSeconds(45)) return false;
             ExitReason = "codex-closed";
             return true;
         }

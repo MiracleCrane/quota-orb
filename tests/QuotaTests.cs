@@ -41,6 +41,8 @@ internal static class QuotaTests
         Check(!noMotionFace.BreathingEnabled&&noMotionFace.BreathingOpacity==0,"Disabling motion must not leave an opaque static halo on first render.");
         VerifyBreathingAcrossQuotaFailure();
         VerifyCodexLifetime();
+        VerifyWindowPolicy();
+        VerifyForegroundPromotion();
         Console.WriteLine("PASS: "+assertions+" quota, credit, placement and UI dispatch assertions.");
     }
     private static void VerifyCodexLifetime()
@@ -54,7 +56,47 @@ internal static class QuotaTests
         Check(!linked.ShouldExit(false,TimeSpan.FromHours(2).Add(TimeSpan.FromSeconds(1))),"A disappearing window must allow a short close grace period.");
         Check(!linked.ShouldExit(true,TimeSpan.FromHours(2).Add(TimeSpan.FromSeconds(4))),"A replacement window during the grace period must cancel the close.");
         Check(!linked.ShouldExit(false,TimeSpan.FromHours(2).Add(TimeSpan.FromSeconds(10))),"A later close must get its own grace period.");
-        Check(linked.ShouldExit(false,TimeSpan.FromHours(2).Add(TimeSpan.FromSeconds(15)))&&linked.ExitReason=="codex-closed","The orb must exit when the final Codex window stays closed.");
+        Check(!linked.ShouldExit(false,TimeSpan.FromHours(2).Add(TimeSpan.FromSeconds(30))),"An update taking more than five seconds must keep the hidden orb ready for the replacement window.");
+        Check(linked.ShouldExit(false,TimeSpan.FromHours(2).Add(TimeSpan.FromSeconds(55)))&&linked.ExitReason=="codex-closed","A closed Codex must still stop the orb after the bounded replacement grace.");
+        var update=new HostLifetime();
+        Check(!update.ShouldExit(true,TimeSpan.Zero)&&!update.ShouldExit(false,TimeSpan.FromSeconds(1))&&!update.ShouldExit(true,TimeSpan.FromSeconds(40)),"A replacement Codex window must cancel update shutdown.");
+    }
+    private static void VerifyWindowPolicy()
+    {
+        Check(WindowPolicy.Foreground(false,false,false,"GameWindow")==ForegroundRole.OtherApplication,"A third-party foreground app must hide the orb regardless of tool/noactivate styles or lower z-order windows.");
+        Check(WindowPolicy.Foreground(false,false,false,"Chrome_WidgetWin_1")==ForegroundRole.OtherApplication,"Another Chromium app must not be classified as Codex.");
+        Check(WindowPolicy.Foreground(false,false,false,"Shell_TrayWnd")==ForegroundRole.SystemSurface,"The taskbar may inspect the underlying front application.");
+        Check(WindowPolicy.Foreground(false,false,false,"CabinetWClass")==ForegroundRole.OtherApplication,"File Explorer is an ordinary application, not a taskbar surface.");
+        Check(WindowPolicy.Foreground(true,false,false,"Chrome_WidgetWin_1")==ForegroundRole.Codex,"An identified Codex process may show the orb.");
+        Check(WindowPolicy.SamePixels(new DeviceRect(10,20,66,66),new DeviceRect(10.5,20.5,66,66)),"Half-pixel targets rounding to the current rectangle must not repost a native move.");
+        Check(!WindowPolicy.SamePixels(new DeviceRect(10,20,66,66),new DeviceRect(11,20,66,66)),"A real pixel movement must still move the orb.");
+        Check(!WindowPolicy.IsRecoverableWindowFailure(new System.ComponentModel.Win32Exception(1816)),"Unrelated quota errors must not be swallowed or restarted.");
+        Check(WindowPolicy.IsRecoverableWindowFailure(new WindowFailureFixture(1816)),"The observed HwndTarget message-quota failure must take the bounded recovery path.");
+        Check(!WindowPolicy.IsRecoverableWindowFailure(new WindowFailureFixture(87)),"Other native window errors must retain normal exception handling.");
+        foreach(double scale in new[]{1.0,1.25,1.5,1.75,2.0}){
+            var target=WindowPolicy.Pixels(Placement.Card(new DeviceRect(0,0,1500,1000),new DeviceRect(10,50,66,66),Math.Round(252*scale),Math.Ceiling(223.2*scale),scale));
+            Check(WindowPolicy.SamePixels(target,new DeviceRect(target.X,target.Y,(target.Width/scale)*scale,(target.Height/scale)*scale)),"Card logical dimensions and native placement must resolve to one identical pixel rectangle at each DPI.");
+        }
+        Check(!DesktopLaunch.RecoveryAllowed(DateTime.UtcNow,DateTime.UtcNow.AddSeconds(30)),"A repeated render failure must not create a restart loop.");
+        Check(DesktopLaunch.RecoveryAllowed(DateTime.UtcNow,DateTime.UtcNow.AddMinutes(2)),"A later isolated render failure may recover.");
+    }
+    private sealed class WindowFailureFixture : System.ComponentModel.Win32Exception
+    {
+        public WindowFailureFixture(int code):base(code){}
+        public override string StackTrace { get { return "at System.Windows.Interop.HwndTarget.UpdateWindowSettings(Boolean)"; } }
+    }
+    private static void VerifyForegroundPromotion()
+    {
+        var owner=Dispatcher.CurrentDispatcher;var frame=new DispatcherFrame();int calls=0;
+        var ticks=new DispatcherTicks(owner,delegate{calls++;frame.Continue=false;});
+        for(int i=0;i<1000;i++)ticks.Request(false);
+        Check(ticks.PendingPriority==DispatcherPriority.Background,"Location bursts must coalesce below foreground input.");
+        ticks.Request(true);ticks.Request(false);
+        Check(ticks.PendingPriority==DispatcherPriority.Input,"A foreground event must promote an already queued geometry tick.");
+        var timeout=new DispatcherTimer{Interval=TimeSpan.FromSeconds(2)};
+        timeout.Tick+=delegate{timeout.Stop();frame.Continue=false;};timeout.Start();
+        Dispatcher.PushFrame(frame);timeout.Stop();
+        Check(calls==1,"A location burst followed by focus change must execute one promoted tick.");
     }
     private static void VerifyBreathingAcrossQuotaFailure()
     {
