@@ -18,7 +18,9 @@ $launcherArguments += (Join-Path $PSScriptRoot 'launcher\LauncherProgram.cs'),(J
 & $compiler @launcherArguments
 if ($LASTEXITCODE -ne 0) { throw 'Launcher build failed.' }
 if ($Test) {
-    $testArguments = @('/nologo','/target:exe',('/out:' + (Join-Path $OutputDirectory 'QuotaOrb.Tests.exe')),('/reference:' + (Join-Path $OutputDirectory 'QuotaOrb.exe')))
+    & $compiler /nologo /target:winexe ('/out:' + (Join-Path $OutputDirectory 'QuotaOrb.LaunchFixture.exe')) ('/reference:' + (Join-Path $framework 'System.Web.Extensions.dll')) (Join-Path $PSScriptRoot 'tests\LaunchFixture.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Launch fixture build failed.' }
+    $testArguments = @('/nologo','/target:exe','/main:QuotaTests',('/out:' + (Join-Path $OutputDirectory 'QuotaOrb.Tests.exe')),('/reference:' + (Join-Path $OutputDirectory 'QuotaOrb.exe')))
     foreach ($reference in $references) { $testArguments += '/reference:' + $(if ([IO.Path]::IsPathRooted($reference)) {$reference} else {Join-Path $framework $reference}) }
     $testArguments += @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'tests') -Filter '*.cs' | ForEach-Object FullName)
     & $compiler @testArguments

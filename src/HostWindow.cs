@@ -59,6 +59,7 @@ namespace QuotaOrb
         private volatile bool disposed;
         private int scanning, samplingTheme;
         internal event Action Changed;
+        internal bool MenuOpen { get; private set; }
 
         public HostFrame Read(int ownProcessId)
         {
@@ -69,7 +70,13 @@ namespace QuotaOrb
             var activeClass = new StringBuilder(128); Native.GetClassName(active, activeClass, activeClass.Capacity);
             var role = WindowPolicy.Foreground(codexProcesses.Contains((int)activePid), activePid == ownProcessId,
                 shellProcesses.Contains((int)activePid), activeClass.ToString());
-            if (role == ForegroundRole.Codex) lastHost = Native.GetAncestor(active, 2);
+            MenuOpen = role == ForegroundRole.Menu || Native.MenuIsOpen();
+            if (MenuOpen) return null;
+            if (role == ForegroundRole.Codex) {
+                IntPtr candidate = Native.GetAncestor(active, 2);
+                if (!IsHostWindow(candidate)) return null;
+                lastHost = candidate;
+            }
             else if (role == ForegroundRole.OtherApplication || !IsFrontApplication(ownProcessId)) return null;
             if (lastHost == IntPtr.Zero || !Native.IsWindowVisible(lastHost) || Native.IsIconic(lastHost)) return null;
             uint hostPid; Native.GetWindowThreadProcessId(lastHost, out hostPid);
@@ -89,9 +96,7 @@ namespace QuotaOrb
                 if (!Native.IsWindowVisible(window)) return true;
                 uint pid; Native.GetWindowThreadProcessId(window, out pid);
                 if (!codexProcesses.Contains((int)pid)) return true;
-                if ((Native.ExtendedStyle(window) & 0x80) != 0) return true;
-                var name = new StringBuilder(128); Native.GetClassName(window, name, name.Capacity);
-                if (!name.ToString().StartsWith("Chrome_WidgetWin_", StringComparison.Ordinal)) return true;
+                if (!IsHostWindow(window)) return true;
                 // A minimized window still exists. Closing its last root window does not.
                 found = true; return false;
             }, IntPtr.Zero);
@@ -144,6 +149,12 @@ namespace QuotaOrb
         private void NotifyChanged() { var handler = Changed; if (!disposed && handler != null) handler(); }
         public void Dispose() { disposed = true; }
 
+        private static bool IsHostWindow(IntPtr window)
+        {
+            var name = new StringBuilder(128); Native.GetClassName(window, name, name.Capacity);
+            return WindowPolicy.IsHostWindow(name.ToString(), Native.GetWindow(window, 4) != IntPtr.Zero, Native.ExtendedStyle(window));
+        }
+
         private bool IsFrontApplication(int ownProcessId)
         {
             bool found = false;
@@ -157,7 +168,10 @@ namespace QuotaOrb
                 if (name == "Shell_TrayWnd" || name == "Shell_SecondaryTrayWnd" || name == "Progman" || name == "WorkerW" || name == "TaskListThumbnailWnd") return true;
                 int cloaked; if (Native.DwmGetWindowAttribute(window, 14, out cloaked, sizeof(int)) == 0 && cloaked != 0) return true;
                 var bounds = Native.Bounds(window); if (bounds.Width < 150 || bounds.Height < 180) return true;
-                if (codexProcesses.Contains((int)pid)) { lastHost = window; found = true; return false; }
+                if (codexProcesses.Contains((int)pid)) {
+                    if (!IsHostWindow(window)) return true;
+                    lastHost = window; found = true; return false;
+                }
                 if (shellProcesses.Contains((int)pid)) return true;
                 // The first ordinary application in z-order is not Codex.
                 return false;
@@ -170,9 +184,16 @@ namespace QuotaOrb
     {
         [StructLayout(LayoutKind.Sequential)] internal struct RECT { public int Left, Top, Right, Bottom; }
         [StructLayout(LayoutKind.Sequential)] internal struct POINT { public int X, Y; }
+        [StructLayout(LayoutKind.Sequential)] private struct GUITHREADINFO {
+            public int Size; public uint Flags;
+            public IntPtr Active, Focus, Capture, MenuOwner, MoveSize, Caret;
+            public RECT CaretRect;
+        }
         [DllImport("user32.dll")] internal static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] internal static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
         [DllImport("user32.dll")] internal static extern IntPtr GetAncestor(IntPtr window, uint flags);
+        [DllImport("user32.dll")] internal static extern IntPtr GetWindow(IntPtr window, uint command);
+        [DllImport("user32.dll")] private static extern bool GetGUIThreadInfo(uint thread, ref GUITHREADINFO info);
         [DllImport("user32.dll")] internal static extern bool IsWindowVisible(IntPtr window);
         [DllImport("user32.dll")] internal static extern bool IsIconic(IntPtr window);
         [DllImport("user32.dll")] internal static extern bool GetWindowRect(IntPtr window, out RECT rect);
@@ -194,6 +215,21 @@ namespace QuotaOrb
         [DllImport("user32.dll", EntryPoint="SetWindowLongW")] private static extern int SetWindowLong32(IntPtr window, int index, int value);
         internal static DeviceRect Bounds(IntPtr window)
         { RECT r; GetWindowRect(window, out r); return new DeviceRect(r.Left, r.Top, r.Right-r.Left, r.Bottom-r.Top); }
+        internal static bool MenuIsOpen()
+        {
+            var info = new GUITHREADINFO { Size = Marshal.SizeOf(typeof(GUITHREADINFO)) };
+            if (GetGUIThreadInfo(0, ref info) && (info.Flags & 0x1c) != 0) return true;
+            // Tray menus can keep the main window as foreground. Inspect only
+            // native popup classes, never reinterpret their bounds as a host.
+            bool open = false;
+            EnumWindows(delegate(IntPtr window, IntPtr state) {
+                if (!IsWindowVisible(window)) return true;
+                var name = new StringBuilder(128); GetClassName(window, name, name.Capacity);
+                if (name.ToString() != "#32768") return true;
+                open = true; return false;
+            }, IntPtr.Zero);
+            return open;
+        }
         internal static void MakeCompanion(IntPtr window)
         {
             long style = ExtendedStyle(window);

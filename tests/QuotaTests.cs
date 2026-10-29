@@ -43,6 +43,8 @@ internal static class QuotaTests
         VerifyCodexLifetime();
         VerifyWindowPolicy();
         VerifyForegroundPromotion();
+        LauncherTests.Run(Check);
+        NativeMenuTests.Run(Check);
         Console.WriteLine("PASS: "+assertions+" quota, credit, placement and UI dispatch assertions.");
     }
     private static void VerifyCodexLifetime()
@@ -68,6 +70,14 @@ internal static class QuotaTests
         Check(WindowPolicy.Foreground(false,false,false,"Shell_TrayWnd")==ForegroundRole.SystemSurface,"The taskbar may inspect the underlying front application.");
         Check(WindowPolicy.Foreground(false,false,false,"CabinetWClass")==ForegroundRole.OtherApplication,"File Explorer is an ordinary application, not a taskbar surface.");
         Check(WindowPolicy.Foreground(true,false,false,"Chrome_WidgetWin_1")==ForegroundRole.Codex,"An identified Codex process may show the orb.");
+        Check(WindowPolicy.Foreground(true,false,false,"#32768")==ForegroundRole.Menu,"A Codex tray menu must hide the companion instead of becoming its host.");
+        Check(WindowPolicy.Foreground(false,false,true,"#32768")==ForegroundRole.Menu,"A shell context menu must hide the companion while the plain taskbar remains supported.");
+        Check(WindowPolicy.Foreground(true,false,false,"Chrome_WidgetWin_2")==ForegroundRole.Menu,"A Chromium popup must not be treated as the Codex main window.");
+        Check(WindowPolicy.IsHostWindow("Chrome_WidgetWin_1",false,0),"The regular Codex root window must remain eligible.");
+        Check(!WindowPolicy.IsHostWindow("Chrome_WidgetWin_1",true,0),"An owned Codex popup must not become the host or prolong its lifetime.");
+        Check(!WindowPolicy.IsHostWindow("Chrome_WidgetWin_2",false,0),"An unowned Chromium menu must not become the host.");
+        Check(!WindowPolicy.IsHostWindow("#32768",false,0),"Native menu dimensions must never be used to position the ball.");
+        Check(!WindowPolicy.IsHostWindow("Chrome_WidgetWin_1",false,0x80),"Codex tool windows must not keep the ball visible.");
         Check(WindowPolicy.SamePixels(new DeviceRect(10,20,66,66),new DeviceRect(10.5,20.5,66,66)),"Half-pixel targets rounding to the current rectangle must not repost a native move.");
         Check(!WindowPolicy.SamePixels(new DeviceRect(10,20,66,66),new DeviceRect(11,20,66,66)),"A real pixel movement must still move the orb.");
         Check(!WindowPolicy.IsRecoverableWindowFailure(new System.ComponentModel.Win32Exception(1816)),"Unrelated quota errors must not be swallowed or restarted.");
