@@ -18,8 +18,8 @@ using System.Windows.Threading;
 
 [assembly: AssemblyTitle("Quota Orb")]
 [assembly: AssemblyDescription("Minimal Codex quota companion")]
-[assembly: AssemblyVersion("0.1.7.0")]
-[assembly: AssemblyFileVersion("0.1.7.0")]
+[assembly: AssemblyVersion("0.1.8.0")]
+[assembly: AssemblyFileVersion("0.1.8.0")]
 [assembly: InternalsVisibleTo("QuotaOrb.Tests")]
 [assembly: AssemblyCopyright("Copyright © 2026 MiracleCrane")]
 
@@ -44,7 +44,7 @@ namespace QuotaOrb
             if(args.Length==2&&args[0]=="--snapshot"){
                 using(var client=new CodexClient()){
                     var snapshot=client.Read(Settings.Load().ShowCredits);
-                    File.WriteAllText(args[1],new JavaScriptSerializer().Serialize(new {version="0.1.7",success=snapshot!=null,error=client.Error,quota=snapshot}));
+                    File.WriteAllText(args[1],new JavaScriptSerializer().Serialize(new {version="0.1.8",success=snapshot!=null,error=client.Error,quota=snapshot}));
                     return snapshot==null?1:0;
                 }
             }
@@ -95,6 +95,7 @@ namespace QuotaOrb
         private readonly OrbFace face=new OrbFace();
         private readonly DetailView detail;
         private readonly CompanionWindow orb,card;
+        private readonly CardTransition cardTransition;
         private readonly DispatcherTimer timer,openTimer,closeTimer,snapTimer;
         private readonly bool demo;
         private readonly int ownProcessId = Process.GetCurrentProcess().Id;
@@ -124,13 +125,14 @@ namespace QuotaOrb
             this.app=app;this.demo=demo;
             hostTicks=new DispatcherTicks(app.Dispatcher,delegate{if(!disposed)Tick();});
             detail=new DetailView(settings);orb=new CompanionWindow(demo?"Quota Orb · 演示":"Quota Orb",face){Width=Placement.OrbExtent(ActualDiameter),Height=Placement.OrbExtent(ActualDiameter)};card=new CompanionWindow("Quota Orb · 额度",detail){Width=252,Height=1,Opacity=0};
+            cardTransition=new CardTransition(card,delegate{cardCloseCount++;});
             timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(250)};timer.Tick+=delegate{Tick();};
             openTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(120)};openTimer.Tick+=delegate{openTimer.Stop();OpenCard();};
             closeTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(220)};closeTimer.Tick+=delegate{closeTimer.Stop();if(!CursorWithinCompanion()&&!pinned)CloseCard();};
             snapTimer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(15)};snapTimer.Tick+=delegate{AnimateSnap();};
-            orb.MouseEnter+=delegate{closeTimer.Stop();if(!pointerDown)openTimer.Start();};
+            orb.MouseEnter+=delegate{closeTimer.Stop();if(cardTransition.IsClosing)OpenCard();if(!pointerDown)openTimer.Start();};
             orb.MouseLeave+=delegate{openTimer.Stop();closeTimer.Start();};
-            card.MouseEnter+=delegate{closeTimer.Stop();};card.MouseLeave+=delegate{closeTimer.Start();};
+            card.MouseEnter+=delegate{closeTimer.Stop();if(cardTransition.IsClosing)OpenCard();};card.MouseLeave+=delegate{closeTimer.Start();};
             orb.MouseLeftButtonDown+=BeginDrag;orb.MouseMove+=MoveDrag;orb.MouseLeftButtonUp+=EndDrag;
             orb.MouseRightButtonUp+=delegate{pinned=true;OpenCard();};
             detail.OptionsChanged+=delegate{ApplyVisuals();RequestRefresh();};
@@ -159,7 +161,7 @@ namespace QuotaOrb
             if(host==null){
                 openTimer.Stop();closeTimer.Stop();snapTimer.Stop();snapping=false;pointerDown=false;dragging=false;
                 if(orb.IsMouseCaptured)orb.ReleaseMouseCapture();
-                if(orb.IsVisible)orb.Hide();if(card.IsVisible)card.Hide();
+                if(orb.IsVisible)orb.Hide();if(card.IsVisible||cardTransition.IsClosing)cardTransition.HideImmediately();
                 if(wasVisible||DateTime.Now>=nextStatus){wasVisible=false;WriteStatus();nextStatus=DateTime.Now.AddSeconds(2);}
                 return;
             }
@@ -175,7 +177,7 @@ namespace QuotaOrb
                 if(eventTime!=0)app.Dispatcher.BeginInvoke(new Action(delegate{if(!disposed&&orb.IsVisible)lastRestoreDispatchMs=(int)unchecked((uint)Environment.TickCount-eventTime);}),DispatcherPriority.Render);
                 if(pinned)OpenCard();
             }
-            if(card.IsVisible){PositionCard();if(!pinned&&!pointerDown){if(CursorWithinCompanion())closeTimer.Stop();else if(!closeTimer.IsEnabled)closeTimer.Start();}}
+            if(card.IsVisible){PositionCard();if(!pinned&&!pointerDown){if(CursorWithinCompanion()){closeTimer.Stop();if(cardTransition.IsClosing)OpenCard();}else if(!cardTransition.IsClosing&&!closeTimer.IsEnabled)closeTimer.Start();}}
             if(card.IsVisible&&(Native.GetAsyncKeyState(27)&0x8000)!=0){pinned=false;CloseCard();}
             if(!demo&&!busy&&DateTime.Now>=nextRead)Refresh();
             if(DateTime.Now>=nextStatus){WriteStatus();nextStatus=DateTime.Now.AddSeconds(2);}
@@ -200,19 +202,14 @@ namespace QuotaOrb
         private void OpenCard()
         {
             if(host==null||dragging)return;closeTimer.Stop();
-            if(!card.IsVisible){
-                cardOpenCount++;
-                card.BeginAnimation(UIElement.OpacityProperty,null);card.Opacity=0;
-                card.Show();PositionCard();
-                card.Dispatcher.BeginInvoke(new Action(delegate{
-                    if(!card.IsVisible)return;PositionCard();
-                    if(settings.Motion&&SystemParameters.ClientAreaAnimation)card.BeginAnimation(UIElement.OpacityProperty,new DoubleAnimation(0,1,TimeSpan.FromMilliseconds(120)));
-                    else card.Opacity=1;
-                }),DispatcherPriority.Render);
+            if(!card.IsVisible||cardTransition.IsClosing){
+                if(!card.IsVisible)cardOpenCount++;
+                cardTransition.Show(CardMotionEnabled,PositionCard);
             }
             else PositionCard();
         }
-        private void CloseCard(){openTimer.Stop();if(card.IsVisible)cardCloseCount++;card.BeginAnimation(UIElement.OpacityProperty,null);card.Opacity=0;card.Hide();}
+        private bool CardMotionEnabled { get { return settings.Motion&&SystemParameters.ClientAreaAnimation&&!SystemParameters.HighContrast; } }
+        private void CloseCard(){openTimer.Stop();closeTimer.Stop();cardTransition.Close(CardMotionEnabled);}
         private bool CursorWithinCompanion()
         {
             Native.POINT cursor;Native.GetCursorPos(out cursor);var ball=Native.Bounds(orb.Handle);
@@ -241,7 +238,7 @@ namespace QuotaOrb
         {
             if(!pointerDown||host==null)return;Native.POINT point;Native.GetCursorPos(out point);double dx=point.X-downPoint.X,dy=point.Y-downPoint.Y;
             if(!dragging&&Math.Sqrt(dx*dx+dy*dy)<5*host.Scale)return;
-            dragging=true;pinned=false;CloseCard();snapTimer.Stop();snapping=false;
+            dragging=true;pinned=false;openTimer.Stop();closeTimer.Stop();cardTransition.HideImmediately();snapTimer.Stop();snapping=false;
             Native.Move(orb.Handle,new DeviceRect(Placement.Clamp(dragStart.X+dx,host.Bounds.X,host.Bounds.Right-dragStart.Width),Placement.Clamp(dragStart.Y+dy,host.Bounds.Y,host.Bounds.Bottom-dragStart.Height),dragStart.Width,dragStart.Height));
         }
         private void EndDrag(object sender,MouseButtonEventArgs e)
@@ -267,9 +264,9 @@ namespace QuotaOrb
             if(demo)return;
             try{
                 Directory.CreateDirectory(Settings.DirectoryPath);
-                var status=new {version="0.1.7",processId=ownProcessId,running=!disposed,exitReason=exitReason,writtenAtUtc=DateTimeOffset.UtcNow,source="Codex app-server",quota=snapshot,error=error,
+                var status=new {version="0.1.8",processId=ownProcessId,running=!disposed,exitReason=exitReason,writtenAtUtc=DateTimeOffset.UtcNow,source="Codex app-server",quota=snapshot,error=error,
                     orbVisible=orb.IsVisible,panelVisible=card.IsVisible,hostFound=host!=null,menuOpen=hostReader.MenuOpen,scale=host==null?0:host.Scale,
-                    panelPinned=pinned,panelBounds=card.Handle==IntPtr.Zero?new DeviceRect():Native.Bounds(card.Handle),
+                    panelPinned=pinned,panelClosing=cardTransition.IsClosing,panelBounds=card.Handle==IntPtr.Zero?new DeviceRect():Native.Bounds(card.Handle),
                     orbBounds=orb.Handle==IntPtr.Zero?new DeviceRect():Native.Bounds(orb.Handle),dark=palette.Dark,showCredits=settings.ShowCredits,motion=settings.Motion,diameter=ActualDiameter,preferredDiameter=settings.Diameter,refreshSeconds=settings.RefreshSeconds,
                     toolWindow=orb.Handle!=IntPtr.Zero&&(Native.ExtendedStyle(orb.Handle)&0x80)!=0,taskbarEntry=orb.ShowInTaskbar,cardOpenCount=cardOpenCount,cardCloseCount=cardCloseCount,
                     foregroundHookActive=windowEvents!=null&&windowEvents.ForegroundHookActive,restoreCount=restoreCount,lastRestoreDispatchMs=lastRestoreDispatchMs,breathing=face.BreathingState};

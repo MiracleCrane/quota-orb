@@ -44,6 +44,7 @@ internal static class QuotaTests
         VerifyWindowPolicy();
         VerifyForegroundPromotion();
         HoverTests.Run(Check);
+        CardTransitionTests.Run(Check);
         LauncherTests.Run(Check);
         NativeMenuTests.Run(Check);
         Console.WriteLine("PASS: "+assertions+" quota, credit, placement and UI dispatch assertions.");
