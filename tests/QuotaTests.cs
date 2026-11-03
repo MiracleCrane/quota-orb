@@ -41,6 +41,7 @@ internal static class QuotaTests
         Check(!noMotionFace.BreathingEnabled&&noMotionFace.BreathingOpacity==0,"Disabling motion must not leave an opaque static halo on first render.");
         VerifyBreathingAcrossQuotaFailure();
         VerifyCodexLifetime();
+        InstanceTests.Run(Check);
         VerifyWindowPolicy();
         VerifyForegroundPromotion();
         HoverTests.Run(Check);
@@ -64,6 +65,16 @@ internal static class QuotaTests
         Check(linked.ShouldExit(false,TimeSpan.FromHours(2).Add(TimeSpan.FromSeconds(55)))&&linked.ExitReason=="codex-closed","A closed Codex must still stop the orb after the bounded replacement grace.");
         var update=new HostLifetime();
         Check(!update.ShouldExit(true,TimeSpan.Zero)&&!update.ShouldExit(false,TimeSpan.FromSeconds(1))&&!update.ShouldExit(true,TimeSpan.FromSeconds(40)),"A replacement Codex window must cancel update shutdown.");
+        var reopening=new HostLifetime();
+        reopening.ShouldExit(true,TimeSpan.Zero);reopening.ShouldExit(false,TimeSpan.FromSeconds(1));
+        reopening.RequestStart(TimeSpan.FromSeconds(42));
+        Check(!reopening.ShouldExit(false,TimeSpan.FromSeconds(46)),"A fresh launch must cancel the previous window-close deadline.");
+        Check(!reopening.ShouldExit(true,TimeSpan.FromSeconds(48)),"The new Codex window must still find the existing orb alive.");
+        reopening.ShouldExit(false,TimeSpan.FromSeconds(60));
+        Check(reopening.ShouldExit(false,TimeSpan.FromSeconds(105)),"A later actual close must still exit normally.");
+        reopening.RequestStart(TimeSpan.FromSeconds(120));
+        Check(reopening.ExitReason==null&&!reopening.ShouldExit(false,TimeSpan.FromSeconds(149)),"A new request must get its own bounded startup wait.");
+        Check(reopening.ShouldExit(false,TimeSpan.FromSeconds(150)),"A launch with no new window must not leave a permanent watcher.");
     }
     private static void VerifyWindowPolicy()
     {

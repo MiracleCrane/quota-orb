@@ -18,8 +18,8 @@ using System.Windows.Threading;
 
 [assembly: AssemblyTitle("Quota Orb")]
 [assembly: AssemblyDescription("Minimal Codex quota companion")]
-[assembly: AssemblyVersion("0.1.8.0")]
-[assembly: AssemblyFileVersion("0.1.8.0")]
+[assembly: AssemblyVersion("0.1.9.0")]
+[assembly: AssemblyFileVersion("0.1.9.0")]
 [assembly: InternalsVisibleTo("QuotaOrb.Tests")]
 [assembly: AssemblyCopyright("Copyright © 2026 MiracleCrane")]
 
@@ -28,6 +28,8 @@ namespace QuotaOrb
     internal static class Program
     {
         private const string StopEventName = "Local\\QuotaOrb.Stop.0";
+        private const string StartEventName = "Local\\QuotaOrb.Start.0";
+        private const string StartAcknowledgedName = "Local\\QuotaOrb.StartAcknowledged.0";
         private static bool SignalStop()
         {
             for(int attempt=0;attempt<10;attempt++){
@@ -44,20 +46,24 @@ namespace QuotaOrb
             if(args.Length==2&&args[0]=="--snapshot"){
                 using(var client=new CodexClient()){
                     var snapshot=client.Read(Settings.Load().ShowCredits);
-                    File.WriteAllText(args[1],new JavaScriptSerializer().Serialize(new {version="0.1.8",success=snapshot!=null,error=client.Error,quota=snapshot}));
+                    File.WriteAllText(args[1],new JavaScriptSerializer().Serialize(new {version="0.1.9",success=snapshot!=null,error=client.Error,quota=snapshot}));
                     return snapshot==null?1:0;
                 }
             }
             if(args.Length==2&&args[0]=="--render"){PreviewRenderer.Render(args[1]);return 0;}
             bool demo=Array.IndexOf(args,"--demo")>=0;
             bool toggle=Array.IndexOf(args,"--toggle")>=0;
-            bool created;
             string identity=demo?"Local\\QuotaOrb.Demo."+Guid.NewGuid().ToString("N"):"Local\\QuotaOrb.Standalone.0";
-            using(var instance=new Mutex(true,identity,out created)){
-                if(!created){if(toggle)SignalStop();return 0;}
+            using(var instance=new SingleInstance(identity))
+            using(var startRequest=new EventWaitHandle(false,EventResetMode.AutoReset,demo?identity+".Start":StartEventName))
+            using(var startAcknowledged=new EventWaitHandle(false,EventResetMode.ManualReset,demo?identity+".Acknowledged":StartAcknowledgedName)){
+                if(!instance.OwnsMutex){
+                    if(toggle){SignalStop();return 0;}
+                    if(!instance.NotifyOrTakeOver(startRequest,startAcknowledged,5000))return 0;
+                }
                 var app=new Application{ShutdownMode=ShutdownMode.OnExplicitShutdown};
                 using(var signal=new EventWaitHandle(false,EventResetMode.AutoReset,demo?identity:StopEventName))
-                using(var controller=new OrbController(app,demo)){
+                using(var controller=new OrbController(app,demo,startRequest,startAcknowledged)){
                     app.DispatcherUnhandledException+=delegate(object sender,DispatcherUnhandledExceptionEventArgs error){
                         if(!WindowPolicy.IsRecoverableWindowFailure(error.Exception))return;
                         try{
@@ -98,6 +104,9 @@ namespace QuotaOrb
         private readonly CardTransition cardTransition;
         private readonly DispatcherTimer timer,openTimer,closeTimer,snapTimer;
         private readonly bool demo;
+        private readonly EventWaitHandle startRequest;
+        private readonly EventWaitHandle startAcknowledged;
+        private int startRequestCount;
         private readonly int ownProcessId = Process.GetCurrentProcess().Id;
         private WindowEvents windowEvents;
         private int restoreCount;
@@ -120,9 +129,9 @@ namespace QuotaOrb
         private readonly Stopwatch aliveTime = Stopwatch.StartNew();
         private string exitReason;
 
-        internal OrbController(Application app,bool demo)
+        internal OrbController(Application app,bool demo,EventWaitHandle startRequest,EventWaitHandle startAcknowledged)
         {
-            this.app=app;this.demo=demo;
+            this.app=app;this.demo=demo;this.startRequest=startRequest;this.startAcknowledged=startAcknowledged;
             hostTicks=new DispatcherTicks(app.Dispatcher,delegate{if(!disposed)Tick();});
             detail=new DetailView(settings);orb=new CompanionWindow(demo?"Quota Orb · 演示":"Quota Orb",face){Width=Placement.OrbExtent(ActualDiameter),Height=Placement.OrbExtent(ActualDiameter)};card=new CompanionWindow("Quota Orb · 额度",detail){Width=252,Height=1,Opacity=0};
             cardTransition=new CardTransition(card,delegate{cardCloseCount++;});
@@ -155,6 +164,7 @@ namespace QuotaOrb
         private void Tick()
         {
             if(disposed)return;
+            if(startRequest.WaitOne(0)){lifetime.RequestStart(aliveTime.Elapsed);startRequestCount++;startAcknowledged.Set();}
             if(demo){var area=SystemParameters.WorkArea;double scale=Native.GetDpiForSystem()/96.0;host=new HostFrame{Bounds=new DeviceRect(area.Left*scale,area.Top*scale,area.Width*scale,area.Height*scale),Scale=scale,Dark=true};}
             else host=hostReader.Read(ownProcessId);
             if(!demo&&lifetime.ShouldExit(host!=null||hostReader.HasCodexWindow(),aliveTime.Elapsed)){exitReason=lifetime.ExitReason;app.Shutdown();return;}
@@ -264,7 +274,7 @@ namespace QuotaOrb
             if(demo)return;
             try{
                 Directory.CreateDirectory(Settings.DirectoryPath);
-                var status=new {version="0.1.8",processId=ownProcessId,running=!disposed,exitReason=exitReason,writtenAtUtc=DateTimeOffset.UtcNow,source="Codex app-server",quota=snapshot,error=error,
+                var status=new {version="0.1.9",processId=ownProcessId,running=!disposed,exitReason=exitReason,writtenAtUtc=DateTimeOffset.UtcNow,source="Codex app-server",quota=snapshot,error=error,startRequestCount=startRequestCount,
                     orbVisible=orb.IsVisible,panelVisible=card.IsVisible,hostFound=host!=null,menuOpen=hostReader.MenuOpen,scale=host==null?0:host.Scale,
                     panelPinned=pinned,panelClosing=cardTransition.IsClosing,panelBounds=card.Handle==IntPtr.Zero?new DeviceRect():Native.Bounds(card.Handle),
                     orbBounds=orb.Handle==IntPtr.Zero?new DeviceRect():Native.Bounds(orb.Handle),dark=palette.Dark,showCredits=settings.ShowCredits,motion=settings.Motion,diameter=ActualDiameter,preferredDiameter=settings.Diameter,refreshSeconds=settings.RefreshSeconds,

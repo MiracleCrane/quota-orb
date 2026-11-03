@@ -6,13 +6,22 @@ namespace QuotaOrb
     {
         private bool hasSeenWindow;
         private TimeSpan? missingSince;
+        private TimeSpan startupSince;
         public string ExitReason { get; private set; }
+
+        public void RequestStart(TimeSpan elapsed)
+        {
+            startupSince = elapsed;
+            hasSeenWindow = false;
+            missingSince = null;
+            ExitReason = null;
+        }
 
         public bool ShouldExit(bool windowExists, TimeSpan elapsed)
         {
             if (windowExists) { hasSeenWindow = true; missingSince = null; return false; }
             if (!hasSeenWindow) {
-                if (elapsed < TimeSpan.FromSeconds(30)) return false;
+                if (elapsed - startupSince < TimeSpan.FromSeconds(30)) return false;
                 ExitReason = "codex-not-started";
                 return true;
             }
