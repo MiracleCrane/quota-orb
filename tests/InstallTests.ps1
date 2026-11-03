@@ -9,6 +9,7 @@ $before = Snapshot
 & (Join-Path $repo 'install.ps1') -Destination $root -NoShortcuts
 $status = (& (Join-Path $repo 'Get-QuotaOrb.ps1') -Destination $root) | ConvertFrom-Json
 if (-not $status.installed -or $status.running -or $status.statusFresh) { throw 'Component query must report its own installation only.' }
+if ($status.processIds.Count -ne 0) { throw 'A stopped component must return an empty PID array.' }
 & (Join-Path $repo 'install.ps1') -Destination $root -NoShortcuts
 if ((Snapshot) -ne $before) { throw 'Component install modified a shortcut.' }
 [IO.File]::WriteAllText((Join-Path $root 'keep.txt'),'preserve user files')
