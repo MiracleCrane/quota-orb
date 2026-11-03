@@ -1,8 +1,11 @@
 param(
     [string]$Destination = (Join-Path $env:LOCALAPPDATA 'Programs\QuotaOrb'),
-    [string[]]$CodexShortcutPath = @()
+    [string[]]$CodexShortcutPath = @(),
+    [switch]$NoShortcuts
 )
 $ErrorActionPreference = 'Stop'
+if ($NoShortcuts -and $CodexShortcutPath.Count) { throw 'NoShortcuts cannot be combined with CodexShortcutPath.' }
+if ($NoShortcuts -and (Test-Path -LiteralPath (Join-Path $Destination 'linked-shortcuts'))) { throw 'Detach existing linked shortcuts before adopting this installation in a kit.' }
 if (-not ('QuotaOrb.InstallationPaths' -as [type])) {
     Add-Type -TypeDefinition @'
 using System;
@@ -75,7 +78,8 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'LICENSE') -Destination $destina
 $target = [QuotaOrb.InstallationPaths]::ExistingFile((Join-Path $destinationFull 'QuotaOrb.exe'))
 $linkedLauncher = [QuotaOrb.InstallationPaths]::ExistingFile((Join-Path $destinationFull 'QuotaOrb.Launcher.exe'))
 $installedDirectory = Split-Path -Parent $target
-$folders = @([Environment]::GetFolderPath('Desktop'), (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'))
+$folders = @()
+if (-not $NoShortcuts) { $folders = @([Environment]::GetFolderPath('Desktop'), (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs')) }
 foreach ($folder in $folders) {
     $link = $shell.CreateShortcut((Join-Path $folder 'Quota Orb.lnk'))
     $link.TargetPath = $target
@@ -86,7 +90,7 @@ foreach ($folder in $folders) {
 }
 # Linked mode has no logon watcher. Preserve the old shortcut outside Startup.
 $oldStartup = Join-Path ([Environment]::GetFolderPath('Startup')) 'Quota Orb.lnk'
-if (Test-Path -LiteralPath $oldStartup) {
+if (-not $NoShortcuts -and (Test-Path -LiteralPath $oldStartup)) {
     $oldLink = $shell.CreateShortcut($oldStartup)
     if ($oldLink.TargetPath -eq $target) {
         New-Item -ItemType Directory -Path $backup -Force | Out-Null
@@ -116,5 +120,7 @@ if ($validatedLinks.Count) {
         $index++
     }
 }
-Write-Output "Installed to $destinationFull"
-Write-Output 'Quota Orb shortcut toggles the ball. The ball exits after the last Codex window closes.'
+$receipt = [pscustomobject]@{schemaVersion=1;component='quota-orb';version=(Get-Item -LiteralPath $target).VersionInfo.FileVersion;directory=$installedDirectory;mode=$(if($NoShortcuts){'component'}else{'standalone'})}
+[IO.File]::WriteAllText((Join-Path $installedDirectory 'quota-orb-install.json'), ($receipt | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
+Write-Output "Installed to $installedDirectory"
+if (-not $NoShortcuts) { Write-Output 'Quota Orb shortcut toggles the ball. The ball exits after the last Codex window closes.' }

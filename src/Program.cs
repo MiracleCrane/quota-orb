@@ -18,8 +18,8 @@ using System.Windows.Threading;
 
 [assembly: AssemblyTitle("Quota Orb")]
 [assembly: AssemblyDescription("Minimal Codex quota companion")]
-[assembly: AssemblyVersion("0.1.9.0")]
-[assembly: AssemblyFileVersion("0.1.9.0")]
+[assembly: AssemblyVersion("0.1.10.0")]
+[assembly: AssemblyFileVersion("0.1.10.0")]
 [assembly: InternalsVisibleTo("QuotaOrb.Tests")]
 [assembly: AssemblyCopyright("Copyright © 2026 MiracleCrane")]
 
@@ -46,7 +46,7 @@ namespace QuotaOrb
             if(args.Length==2&&args[0]=="--snapshot"){
                 using(var client=new CodexClient()){
                     var snapshot=client.Read(Settings.Load().ShowCredits);
-                    File.WriteAllText(args[1],new JavaScriptSerializer().Serialize(new {version="0.1.9",success=snapshot!=null,error=client.Error,quota=snapshot}));
+                    File.WriteAllText(args[1],new JavaScriptSerializer().Serialize(new {version="0.1.10",success=snapshot!=null,error=client.Error,quota=snapshot}));
                     return snapshot==null?1:0;
                 }
             }
@@ -274,7 +274,7 @@ namespace QuotaOrb
             if(demo)return;
             try{
                 Directory.CreateDirectory(Settings.DirectoryPath);
-                var status=new {version="0.1.9",processId=ownProcessId,running=!disposed,exitReason=exitReason,writtenAtUtc=DateTimeOffset.UtcNow,source="Codex app-server",quota=snapshot,error=error,startRequestCount=startRequestCount,
+                var status=new {version="0.1.10",processId=ownProcessId,running=!disposed,exitReason=exitReason,writtenAtUtc=DateTimeOffset.UtcNow,source="Codex app-server",quota=snapshot,error=error,startRequestCount=startRequestCount,
                     orbVisible=orb.IsVisible,panelVisible=card.IsVisible,hostFound=host!=null,menuOpen=hostReader.MenuOpen,scale=host==null?0:host.Scale,
                     panelPinned=pinned,panelClosing=cardTransition.IsClosing,panelBounds=card.Handle==IntPtr.Zero?new DeviceRect():Native.Bounds(card.Handle),
                     orbBounds=orb.Handle==IntPtr.Zero?new DeviceRect():Native.Bounds(orb.Handle),dark=palette.Dark,showCredits=settings.ShowCredits,motion=settings.Motion,diameter=ActualDiameter,preferredDiameter=settings.Diameter,refreshSeconds=settings.RefreshSeconds,

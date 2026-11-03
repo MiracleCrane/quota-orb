@@ -6,6 +6,8 @@
 
 ## Windows 使用
 
+统一套件集成请使用[组件契约 v1](docs/component-contract.md)：`install.ps1 -Destination <目录> -NoShortcuts`、幂等启动、JSON 状态查询及组件卸载。此模式不接管任何 Codex 快捷方式；统一入口由桌面工具包管理。
+
 要求 Windows 10/11、.NET Framework 4.8，以及已经登录的官方 Codex Windows 客户端或 CLI。无需 API Key，不读取或复制 `auth.json`。
 
 ```powershell

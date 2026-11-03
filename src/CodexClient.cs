@@ -63,7 +63,7 @@ namespace QuotaOrb
             };
             process.ErrorDataReceived += delegate { };
             process.Start(); process.BeginOutputReadLine(); process.BeginErrorReadLine();
-            Request("initialize", new { clientInfo = new { name = "quota-orb", title = "Quota Orb", version = "0.1.9" },
+            Request("initialize", new { clientInfo = new { name = "quota-orb", title = "Quota Orb", version = "0.1.10" },
                 capabilities = new { experimentalApi = true } });
             Send(new { method = "initialized" });
         }
