@@ -49,6 +49,8 @@ internal static class QuotaTests
         LauncherTests.Run(Check);
         NativeMenuTests.Run(Check);
         PositionTests.Run(Check);
+        BreathingTests.Run(Check);
+        MenuVisualTests.Run(Check);
         Console.WriteLine("PASS: "+assertions+" quota, credit, placement and UI dispatch assertions.");
     }
     private static void VerifyCodexLifetime()

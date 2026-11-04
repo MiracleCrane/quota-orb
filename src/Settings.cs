@@ -8,6 +8,7 @@ namespace QuotaOrb
     {
         public bool ShowCredits = false;
         public bool Motion = true;
+        public bool? BreathingEnabled = null;
         public string Theme = "auto";
         public string Side = "right";
         public double VerticalPosition = 0.52;
