@@ -1,0 +1,35 @@
+name: Windows build
+on:
+  push:
+    branches: [main, 'feature/**']
+  pull_request:
+jobs:
+  native:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and verify
+        shell: pwsh
+        run: ./build.ps1 -Test
+      - name: Verify component installation
+        shell: pwsh
+        run: ./tests/InstallTests.ps1
+      - name: Package component
+        shell: pwsh
+        run: ./package.ps1 -OutputDirectory "$env:RUNNER_TEMP/quota-orb-release"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quota-orb-windows
+          path: |
+            artifacts/QuotaOrb.exe
+            artifacts/QuotaOrb.exe.config
+            artifacts/QuotaOrb.Launcher.exe
+            LICENSE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quota-orb-release
+          path: |
+            ${{ runner.temp }}/quota-orb-release/*.zip
+            ${{ runner.temp }}/quota-orb-release/SHA256SUMS
