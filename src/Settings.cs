@@ -12,8 +12,17 @@ namespace QuotaOrb
         public string Side = "right";
         public double VerticalPosition = 0.52;
         public int RefreshSeconds = 15;
-        public int Diameter = 24;
+        public int Diameter = 36;
+        public bool PositionLocked = true;
+        public bool UseOfficialPosition = true;
         public string CodexPath = "";
+        public void RestoreDefaultPosition()
+        {
+            PositionLocked = true;
+            UseOfficialPosition = true;
+            Side = "left";
+            VerticalPosition = 0.52;
+        }
         public static string DirectoryPath { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "QuotaOrb"); } }
         public static Settings Load()
         {

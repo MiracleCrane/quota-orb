@@ -48,6 +48,7 @@ internal static class QuotaTests
         CardTransitionTests.Run(Check);
         LauncherTests.Run(Check);
         NativeMenuTests.Run(Check);
+        PositionTests.Run(Check);
         Console.WriteLine("PASS: "+assertions+" quota, credit, placement and UI dispatch assertions.");
     }
     private static void VerifyCodexLifetime()

@@ -18,8 +18,8 @@ using System.Windows.Threading;
 
 [assembly: AssemblyTitle("Quota Orb")]
 [assembly: AssemblyDescription("Minimal Codex quota companion")]
-[assembly: AssemblyVersion("0.1.10.0")]
-[assembly: AssemblyFileVersion("0.1.10.0")]
+[assembly: AssemblyVersion("0.1.11.0")]
+[assembly: AssemblyFileVersion("0.1.11.0")]
 [assembly: InternalsVisibleTo("QuotaOrb.Tests")]
 [assembly: AssemblyCopyright("Copyright © 2026 MiracleCrane")]
 
@@ -46,7 +46,7 @@ namespace QuotaOrb
             if(args.Length==2&&args[0]=="--snapshot"){
                 using(var client=new CodexClient()){
                     var snapshot=client.Read(Settings.Load().ShowCredits);
-                    File.WriteAllText(args[1],new JavaScriptSerializer().Serialize(new {version="0.1.10",success=snapshot!=null,error=client.Error,quota=snapshot}));
+                    File.WriteAllText(args[1],new JavaScriptSerializer().Serialize(new {version="0.1.11",success=snapshot!=null,error=client.Error,quota=snapshot}));
                     return snapshot==null?1:0;
                 }
             }
@@ -101,6 +101,7 @@ namespace QuotaOrb
         private readonly OrbFace face=new OrbFace();
         private readonly DetailView detail;
         private readonly CompanionWindow orb,card;
+        private ContextMenu positionMenu;
         private readonly CardTransition cardTransition;
         private readonly DispatcherTimer timer,openTimer,closeTimer,snapTimer;
         private readonly bool demo;
@@ -143,7 +144,7 @@ namespace QuotaOrb
             orb.MouseLeave+=delegate{openTimer.Stop();closeTimer.Start();};
             card.MouseEnter+=delegate{closeTimer.Stop();if(cardTransition.IsClosing)OpenCard();};card.MouseLeave+=delegate{closeTimer.Start();};
             orb.MouseLeftButtonDown+=BeginDrag;orb.MouseMove+=MoveDrag;orb.MouseLeftButtonUp+=EndDrag;
-            orb.MouseRightButtonUp+=delegate{pinned=true;OpenCard();};
+            orb.MouseRightButtonUp+=delegate(object sender,MouseButtonEventArgs e){OpenPositionMenu();e.Handled=true;};
             detail.OptionsChanged+=delegate{ApplyVisuals();RequestRefresh();};
             detail.RefreshRequested+=RequestRefresh;
             detail.ExitRequested+=delegate{app.Shutdown();};
@@ -165,6 +166,13 @@ namespace QuotaOrb
         {
             if(disposed)return;
             if(startRequest.WaitOne(0)){lifetime.RequestStart(aliveTime.Elapsed);startRequestCount++;startAcknowledged.Set();}
+            if(positionMenu!=null&&positionMenu.IsOpen){
+                if(host!=null&&(demo||hostReader.CanKeepPositionMenu(ownProcessId,host.Handle))){
+                    if(DateTime.Now>=nextStatus){WriteStatus();nextStatus=DateTime.Now.AddSeconds(2);}
+                    return;
+                }
+                positionMenu.IsOpen=false;
+            }
             if(demo){var area=SystemParameters.WorkArea;double scale=Native.GetDpiForSystem()/96.0;host=new HostFrame{Bounds=new DeviceRect(area.Left*scale,area.Top*scale,area.Width*scale,area.Height*scale),Scale=scale,Dark=true};}
             else host=hostReader.Read(ownProcessId);
             if(!demo&&lifetime.ShouldExit(host!=null||hostReader.HasCodexWindow(),aliveTime.Elapsed)){exitReason=lifetime.ExitReason;app.Shutdown();return;}
@@ -179,7 +187,7 @@ namespace QuotaOrb
             if(palette.Dark!=dark){palette=new Palette(dark);ApplyVisuals();}
             if(windowEvents!=null)windowEvents.Track(host.Handle);
             if(!orb.IsVisible)orb.Show();
-            if(!dragging&&!snapping)Native.Move(orb.Handle,Placement.Orb(host.Bounds,settings.Side,settings.VerticalPosition,host.Scale,ActualDiameter));
+            if(!dragging&&!snapping)Native.Move(orb.Handle,DesiredOrbPosition());
             if(!wasVisible){
                 wasVisible=true;restoreCount++;
                 if(DateTime.Now-nextRead>TimeSpan.FromSeconds(5))nextRead=DateTime.MinValue;
@@ -208,7 +216,28 @@ namespace QuotaOrb
             ApplyVisuals();WriteStatus();
         }
         private void RequestRefresh(){if(busy)refreshAgain=true;else nextRead=DateTime.MinValue;}
-        private void ApplyVisuals(){orb.Width=orb.Height=Placement.OrbExtent(ActualDiameter);face.Update(snapshot,palette,!String.IsNullOrEmpty(error),settings.Motion,settings.Diameter);detail.Update(snapshot,palette,error);}
+        private void ApplyVisuals(){orb.Width=orb.Height=Placement.OrbExtent(ActualDiameter);orb.Cursor=settings.PositionLocked?Cursors.Arrow:Cursors.SizeAll;face.Update(snapshot,palette,!String.IsNullOrEmpty(error),settings.Motion,settings.Diameter);detail.Update(snapshot,palette,error);}
+        private DeviceRect DesiredOrbPosition()
+        {
+            if(!settings.UseOfficialPosition)return Placement.Orb(host.Bounds,settings.Side,settings.VerticalPosition,host.Scale,ActualDiameter);
+            var client=host.ClientBounds.Width>0?host.ClientBounds:host.Bounds;
+            return Placement.OfficialOrb(client,host.Scale,ActualDiameter);
+        }
+        private void OpenPositionMenu()
+        {
+            if(host==null)return;
+            openTimer.Stop();closeTimer.Stop();pinned=false;cardTransition.HideImmediately();
+            var menu=PositionMenu.Create(settings,palette,delegate{
+                snapTimer.Stop();snapping=false;pointerDown=false;dragging=false;
+                if(orb.IsMouseCaptured)orb.ReleaseMouseCapture();
+                settings.Save();ApplyVisuals();QueueHostTick(0);
+            },delegate{pinned=true;OpenCard();});
+            positionMenu=menu;
+            menu.PlacementTarget=orb;
+            menu.Placement=System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+            menu.Closed+=delegate{if(ReferenceEquals(positionMenu,menu))positionMenu=null;QueueHostTick(0);};
+            menu.IsOpen=true;
+        }
         private void OpenCard()
         {
             if(host==null||dragging)return;closeTimer.Stop();
@@ -246,16 +275,16 @@ namespace QuotaOrb
         {if(host==null)return;Native.GetCursorPos(out downPoint);dragStart=Native.Bounds(orb.Handle);pointerDown=true;dragging=false;openTimer.Stop();orb.CaptureMouse();e.Handled=true;}
         private void MoveDrag(object sender,MouseEventArgs e)
         {
-            if(!pointerDown||host==null)return;Native.POINT point;Native.GetCursorPos(out point);double dx=point.X-downPoint.X,dy=point.Y-downPoint.Y;
+            if(!pointerDown||host==null||settings.PositionLocked)return;Native.POINT point;Native.GetCursorPos(out point);double dx=point.X-downPoint.X,dy=point.Y-downPoint.Y;
             if(!dragging&&Math.Sqrt(dx*dx+dy*dy)<5*host.Scale)return;
             dragging=true;pinned=false;openTimer.Stop();closeTimer.Stop();cardTransition.HideImmediately();snapTimer.Stop();snapping=false;
             Native.Move(orb.Handle,new DeviceRect(Placement.Clamp(dragStart.X+dx,host.Bounds.X,host.Bounds.Right-dragStart.Width),Placement.Clamp(dragStart.Y+dy,host.Bounds.Y,host.Bounds.Bottom-dragStart.Height),dragStart.Width,dragStart.Height));
         }
         private void EndDrag(object sender,MouseButtonEventArgs e)
         {
-            if(!pointerDown)return;pointerDown=false;orb.ReleaseMouseCapture();
+            if(!pointerDown)return;pointerDown=false;if(orb.IsMouseCaptured)orb.ReleaseMouseCapture();
             if(dragging&&host!=null){
-                var current=Native.Bounds(orb.Handle);settings.Side=current.X+current.Width/2<host.Bounds.X+host.Bounds.Width/2?"left":"right";
+                var current=Native.Bounds(orb.Handle);settings.UseOfficialPosition=false;settings.Side=current.X+current.Width/2<host.Bounds.X+host.Bounds.Width/2?"left":"right";
                 double top=host.Bounds.Y+48*host.Scale,range=host.Bounds.Bottom-6*host.Scale-current.Height-top;
                 settings.VerticalPosition=Placement.Clamp((current.Y-top)/Math.Max(1,range),0,1);settings.Save();
                 snapStart=current;snapEnd=Placement.Orb(host.Bounds,settings.Side,settings.VerticalPosition,host.Scale,ActualDiameter);snapBegan=DateTime.Now;
@@ -274,10 +303,11 @@ namespace QuotaOrb
             if(demo)return;
             try{
                 Directory.CreateDirectory(Settings.DirectoryPath);
-                var status=new {version="0.1.10",processId=ownProcessId,running=!disposed,exitReason=exitReason,writtenAtUtc=DateTimeOffset.UtcNow,source="Codex app-server",quota=snapshot,error=error,startRequestCount=startRequestCount,
+                var status=new {version="0.1.11",processId=ownProcessId,running=!disposed,exitReason=exitReason,writtenAtUtc=DateTimeOffset.UtcNow,source="Codex app-server",quota=snapshot,error=error,startRequestCount=startRequestCount,
                     orbVisible=orb.IsVisible,panelVisible=card.IsVisible,hostFound=host!=null,menuOpen=hostReader.MenuOpen,scale=host==null?0:host.Scale,
                     panelPinned=pinned,panelClosing=cardTransition.IsClosing,panelBounds=card.Handle==IntPtr.Zero?new DeviceRect():Native.Bounds(card.Handle),
                     orbBounds=orb.Handle==IntPtr.Zero?new DeviceRect():Native.Bounds(orb.Handle),dark=palette.Dark,showCredits=settings.ShowCredits,motion=settings.Motion,diameter=ActualDiameter,preferredDiameter=settings.Diameter,refreshSeconds=settings.RefreshSeconds,
+                    positionLocked=settings.PositionLocked,positionMode=settings.UseOfficialPosition?"official-usage":"custom",positionMenuOpen=positionMenu!=null&&positionMenu.IsOpen,
                     toolWindow=orb.Handle!=IntPtr.Zero&&(Native.ExtendedStyle(orb.Handle)&0x80)!=0,taskbarEntry=orb.ShowInTaskbar,cardOpenCount=cardOpenCount,cardCloseCount=cardCloseCount,
                     foregroundHookActive=windowEvents!=null&&windowEvents.ForegroundHookActive,restoreCount=restoreCount,lastRestoreDispatchMs=lastRestoreDispatchMs,breathing=face.BreathingState};
                 File.WriteAllText(Path.Combine(Settings.DirectoryPath,"status.json"),new JavaScriptSerializer().Serialize(status));
@@ -292,7 +322,7 @@ namespace QuotaOrb
                 WriteStatus();
             }catch(IOException){}
         }
-        public void Dispose(){disposed=true;if(windowEvents!=null)windowEvents.Dispose();hostReader.Dispose();timer.Stop();openTimer.Stop();closeTimer.Stop();snapTimer.Stop();orb.Close();card.Close();client.Dispose();WriteStatus();}
+        public void Dispose(){disposed=true;if(positionMenu!=null)positionMenu.IsOpen=false;if(windowEvents!=null)windowEvents.Dispose();hostReader.Dispose();timer.Stop();openTimer.Stop();closeTimer.Stop();snapTimer.Stop();orb.Close();card.Close();client.Dispose();WriteStatus();}
     }
 
     internal static class PreviewRenderer
@@ -301,7 +331,7 @@ namespace QuotaOrb
         {
             Directory.CreateDirectory(directory);
             foreach(bool dark in new[]{true,false})foreach(bool both in new[]{false,true}){
-                var palette=new Palette(dark);var data=QuotaSnapshot.Demo(both);var face=new OrbFace();face.Update(data,palette,false,false,24);
+                var palette=new Palette(dark);var data=QuotaSnapshot.Demo(both);var face=new OrbFace();face.Update(data,palette,false,false,new Settings().Diameter);
                 Save(face,face.Width,face.Height,Path.Combine(directory,(dark?"dark":"light")+(both?"-both-orb.png":"-week-orb.png")),2);
                 var view=new DetailView(new Settings());view.Update(data,palette,null);view.Measure(new Size(252,Double.PositiveInfinity));
                 Save(view,252,view.DesiredSize.Height,Path.Combine(directory,(dark?"dark":"light")+(both?"-both-card.png":"-week-card.png")),2);

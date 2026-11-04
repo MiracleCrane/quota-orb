@@ -21,6 +21,14 @@ namespace QuotaOrb
         public static int EffectiveDiameter(int preference, bool dualQuota) { return Math.Max(dualQuota ? 40 : 24, Math.Min(80, preference)); }
         public static double OrbExtent(int diameter) { return diameter + (diameter < 32 ? 4 : 8); }
         public static double Clamp(double value, double min, double max) { return Math.Max(min, Math.Min(Math.Max(min, max), value)); }
+        public static DeviceRect OfficialOrb(DeviceRect client, double scale, int diameter)
+        {
+            // Compact Codex rail: 8px left padding + half a 36px button;
+            // bottom padding 4px + profile 36px + gap 8px + half the usage button.
+            double size = OrbExtent(diameter) * scale;
+            return new DeviceRect(client.X + 26 * scale - size / 2,
+                client.Bottom - 66 * scale - size / 2, size, size);
+        }
         public static DeviceRect Orb(DeviceRect host, string side, double fraction, double scale, int diameter = 64)
         {
             double size = OrbExtent(diameter) * scale, gap = 4 * scale, top = host.Y + 48 * scale;
@@ -44,6 +52,7 @@ namespace QuotaOrb
     {
         public IntPtr Handle;
         public DeviceRect Bounds;
+        public DeviceRect ClientBounds;
         public double Scale;
         public bool Dark;
     }
@@ -86,7 +95,14 @@ namespace QuotaOrb
             double scale = Native.GetDpiForWindow(lastHost) / 96.0;
             if (scale <= 0) scale = 1;
             if (DateTime.UtcNow >= nextThemeRead) QueueThemeRead(lastHost, bounds, scale);
-            return new HostFrame { Handle = lastHost, Bounds = bounds, Scale = scale, Dark = dark };
+            return new HostFrame { Handle = lastHost, Bounds = bounds, ClientBounds = Native.ClientBounds(lastHost), Scale = scale, Dark = dark };
+        }
+
+        internal bool CanKeepPositionMenu(int ownProcessId, IntPtr window)
+        {
+            if (window == IntPtr.Zero || !Native.IsWindowVisible(window) || Native.IsIconic(window)) return false;
+            uint activePid; Native.GetWindowThreadProcessId(Native.GetForegroundWindow(), out activePid);
+            return activePid == ownProcessId || codexProcesses.Contains((int)activePid);
         }
 
         internal bool HasCodexWindow()
@@ -197,6 +213,8 @@ namespace QuotaOrb
         [DllImport("user32.dll")] internal static extern bool IsWindowVisible(IntPtr window);
         [DllImport("user32.dll")] internal static extern bool IsIconic(IntPtr window);
         [DllImport("user32.dll")] internal static extern bool GetWindowRect(IntPtr window, out RECT rect);
+        [DllImport("user32.dll")] private static extern bool GetClientRect(IntPtr window, out RECT rect);
+        [DllImport("user32.dll")] private static extern bool ClientToScreen(IntPtr window, ref POINT point);
         [DllImport("user32.dll")] internal static extern uint GetDpiForWindow(IntPtr window);
         [DllImport("user32.dll")] internal static extern uint GetDpiForSystem();
         internal delegate bool EnumWindowsCallback(IntPtr window, IntPtr parameter);
@@ -215,6 +233,12 @@ namespace QuotaOrb
         [DllImport("user32.dll", EntryPoint="SetWindowLongW")] private static extern int SetWindowLong32(IntPtr window, int index, int value);
         internal static DeviceRect Bounds(IntPtr window)
         { RECT r; GetWindowRect(window, out r); return new DeviceRect(r.Left, r.Top, r.Right-r.Left, r.Bottom-r.Top); }
+        internal static DeviceRect ClientBounds(IntPtr window)
+        {
+            RECT rect; var origin = new POINT();
+            if (!GetClientRect(window, out rect) || !ClientToScreen(window, ref origin)) return Bounds(window);
+            return new DeviceRect(origin.X, origin.Y, rect.Right - rect.Left, rect.Bottom - rect.Top);
+        }
         internal static bool MenuIsOpen()
         {
             var info = new GUITHREADINFO { Size = Marshal.SizeOf(typeof(GUITHREADINFO)) };
